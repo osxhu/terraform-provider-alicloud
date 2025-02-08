@@ -40,7 +40,7 @@ func testSweepEcdRamDirectory(region string) error {
 
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return fmt.Errorf("error getting Alicloud client: %s", err)
+		return fmt.Errorf("error getting AliCloud client: %s", err)
 	}
 	aliyunClient := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
@@ -53,17 +53,10 @@ func testSweepEcdRamDirectory(region string) error {
 	request["MaxResults"] = PageSizeLarge
 
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewGwsecdClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-30"), StringPointer("AK"), nil, request, &runtime)
+			response, err = aliyunClient.RpcPost("ecd", "2020-09-30", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -103,7 +96,7 @@ func testSweepEcdRamDirectory(region string) error {
 				"DirectoryId": []string{fmt.Sprint(item["DirectoryId"])},
 				"RegionId":    aliyunClient.RegionId,
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-30"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = aliyunClient.RpcPost("ecd", "2020-09-30", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Ecd Ram Directory (%s): %s", item["Name"].(string), err)
 			}
@@ -118,11 +111,12 @@ func testSweepEcdRamDirectory(region string) error {
 	return nil
 }
 
-func TestAccAlicloudECDRamDirectory_basic0(t *testing.T) {
+// resource alicloud_ecd_ram_directory has been deprecated from version 1.239.0
+func SkipTestAccAliCloudECDRamDirectory_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ecd_ram_directory.default"
 	checkoutSupportedRegions(t, true, connectivity.EcdSupportRegions)
-	ra := resourceAttrInit(resourceId, AlicloudECDRamDirectoryMap0)
+	ra := resourceAttrInit(resourceId, AliCloudECDRamDirectoryMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &EcdService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeEcdRamDirectory")
@@ -130,7 +124,7 @@ func TestAccAlicloudECDRamDirectory_basic0(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%secdramdirectory%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudECDRamDirectoryBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudECDRamDirectoryBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -160,11 +154,11 @@ func TestAccAlicloudECDRamDirectory_basic0(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudECDRamDirectory_basic1(t *testing.T) {
+func SkipTestAccAliCloudECDRamDirectory_basic1(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ecd_ram_directory.default"
 	checkoutSupportedRegions(t, true, connectivity.EcdSupportRegions)
-	ra := resourceAttrInit(resourceId, AlicloudECDRamDirectoryMap0)
+	ra := resourceAttrInit(resourceId, AliCloudECDRamDirectoryMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &EcdService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeEcdRamDirectory")
@@ -172,7 +166,7 @@ func TestAccAlicloudECDRamDirectory_basic1(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%secdramdirectory%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudECDRamDirectoryBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudECDRamDirectoryBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -183,7 +177,9 @@ func TestAccAlicloudECDRamDirectory_basic1(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"enable_internet_access": "true",
+					// There is an api bug that the request parameter enable_internet_access does not take effect. This should reopen after the bug is fixed.
+					// "enable_internet_access": "true",
+					"enable_internet_access": "false",
 					"enable_admin_access":    "true",
 					"desktop_access_type":    "INTERNET",
 					"ram_directory_name":     "${var.name}",
@@ -191,7 +187,7 @@ func TestAccAlicloudECDRamDirectory_basic1(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"enable_internet_access": "true",
+						"enable_internet_access": "false",
 						"enable_admin_access":    "true",
 						"desktop_access_type":    "INTERNET",
 						"ram_directory_name":     name,
@@ -209,19 +205,19 @@ func TestAccAlicloudECDRamDirectory_basic1(t *testing.T) {
 	})
 }
 
-var AlicloudECDRamDirectoryMap0 = map[string]string{
+var AliCloudECDRamDirectoryMap0 = map[string]string{
 	"vswitch_ids.#": CHECKSET,
 	"status":        CHECKSET,
 }
 
-func AlicloudECDRamDirectoryBasicDependence0(name string) string {
+func AliCloudECDRamDirectoryBasicDependence0(name string) string {
 	return fmt.Sprintf(` 
 variable "name" {
   default = "%s"
 }
 data "alicloud_ecd_zones" "default" {}
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+    name_regex = "^default-NODELETING$"
 }
 data "alicloud_vswitches" "default" {
   vpc_id  = data.alicloud_vpcs.default.ids.0
@@ -229,7 +225,7 @@ data "alicloud_vswitches" "default" {
 }`, name)
 }
 
-func TestUnitAlicloudECDRamDirectory(t *testing.T) {
+func TestUnitAliCloudECDRamDirectory(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_ecd_ram_directory"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_ecd_ram_directory"].Schema).Data(nil, nil)

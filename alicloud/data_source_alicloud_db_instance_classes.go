@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -45,7 +44,7 @@ func dataSourceAlicloudDBInstanceClasses() *schema.Resource {
 				Optional:     true,
 				ForceNew:     true,
 				Default:      PostPaid,
-				ValidateFunc: validation.StringInSlice([]string{string(PostPaid), string(PrePaid)}, false),
+				ValidateFunc: validation.StringInSlice([]string{string(PostPaid), string(PrePaid), string(Serverless)}, false),
 			},
 			"db_instance_class": {
 				Type:     schema.TypeString,
@@ -54,7 +53,7 @@ func dataSourceAlicloudDBInstanceClasses() *schema.Resource {
 			"category": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Basic", "HighAvailability", "AlwaysOn", "Finance"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"Basic", "HighAvailability", "AlwaysOn", "Finance", "serverless_basic", "serverless_standard", "serverless_ha", "cluster"}, false),
 			},
 			"storage_type": {
 				Type:         schema.TypeString,
@@ -69,7 +68,7 @@ func dataSourceAlicloudDBInstanceClasses() *schema.Resource {
 			"commodity_code": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"bards", "rds", "rords", "rds_rordspre_public_cn", "bards_intl", "rds_intl", "rords_intl", "rds_rordspre_public_intl"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"bards", "rds", "rords", "rds_rordspre_public_cn", "bards_intl", "rds_intl", "rords_intl", "rds_rordspre_public_intl", "rds_serverless_public_cn", "rds_serverless_public_intl"}, false),
 			},
 			"db_instance_id": {
 				Type:     schema.TypeString,
@@ -164,6 +163,7 @@ func dataSourceAlicloudDBInstanceClassesRead(d *schema.ResourceData, meta interf
 		dbInstanceStorageType, dbInstanceStorageTypeOk = d.GetOk("storage_type")
 	}
 	category, categoryOk := d.GetOk("category")
+	var err error
 
 	availableZones := make([]map[string]interface{}, 0)
 	s := make([]map[string]interface{}, 0)
@@ -193,15 +193,9 @@ func dataSourceAlicloudDBInstanceClassesRead(d *schema.ResourceData, meta interf
 			}
 		}
 		var response map[string]interface{}
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -284,17 +278,12 @@ func dataSourceAlicloudDBInstanceClassesRead(d *schema.ResourceData, meta interf
 			targetStorageType = v.(string)
 		}
 		var response map[string]interface{}
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
+
 		for _, engine := range engines {
 			request["Engine"] = engine
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+				response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -388,7 +377,7 @@ func dataSourceAlicloudDBInstanceClassesRead(d *schema.ResourceData, meta interf
 							var response map[string]interface{}
 							wait := incrementalWait(3*time.Second, 3*time.Second)
 							err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-								response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+								response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, true)
 								if err != nil {
 									if NeedRetry(err) {
 										wait()
@@ -431,7 +420,7 @@ func dataSourceAlicloudDBInstanceClassesRead(d *schema.ResourceData, meta interf
 	}
 
 	d.SetId(dataResourceIdHash(ids))
-	err := d.Set("instance_classes", s)
+	err = d.Set("instance_classes", s)
 	if err != nil {
 		return WrapError(err)
 	}

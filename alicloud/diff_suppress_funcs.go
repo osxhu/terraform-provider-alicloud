@@ -250,28 +250,53 @@ func PostPaidDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	return true
 }
 
+func ChargeTypeDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	// payment_type is the instance_charge_type's replacement.
+	if _, ok := d.GetOk("payment_type"); ok {
+		return true
+	}
+	return false
+}
+
 func PostPaidAndRenewDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	if strings.ToLower(d.Get("instance_charge_type").(string)) == "prepaid" && d.Get("auto_renew").(bool) {
+	if v, ok := d.GetOk("instance_charge_type"); ok && strings.ToLower(v.(string)) == "prepaid" && d.Get("auto_renew").(bool) {
+		return false
+	}
+	if v, ok := d.GetOk("payment_type"); ok && v.(string) == "Subscription" && d.Get("auto_renew").(bool) {
 		return false
 	}
 	return true
 }
 
 func redisPostPaidDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	return strings.ToLower(d.Get("payment_type").(string)) == "postpaid"
+	if v, ok := d.GetOk("payment_type"); ok && v.(string) == "PrePaid" {
+		return false
+	}
+
+	if v, ok := d.GetOk("instance_charge_type"); ok && v.(string) == "PrePaid" {
+		return false
+	}
+
+	return true
 }
 
 func redisPostPaidAndRenewDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	if strings.ToLower(d.Get("payment_type").(string)) == "prepaid" && d.Get("auto_renew").(bool) {
+	if v, ok := d.GetOk("payment_type"); ok && v.(string) == "PrePaid" && d.Get("auto_renew").(bool) {
 		return false
 	}
+
+	if v, ok := d.GetOk("instance_charge_type"); ok && v.(string) == "PrePaid" && d.Get("auto_renew").(bool) {
+		return false
+	}
+
 	return true
 }
 
 func ramSAMLProviderDiffSuppressFunc(old, new string) bool {
-	if strings.Replace(old, "\n", "", -1) != strings.Replace(new, "\n", "", -1) {
+	if Trim(strings.Replace(old, "\n", "", -1)) != Trim(strings.Replace(new, "\n", "", -1)) {
 		return false
 	}
+
 	return true
 }
 
@@ -292,15 +317,24 @@ func redisSecurityGroupIdDiffSuppressFunc(k, old, new string, d *schema.Resource
 }
 
 func elasticsearchEnablePublicDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	return d.Get("enable_public").(bool) == false
+	if v, ok := d.GetOkExists("enable_public"); ok && v.(bool) == true {
+		return false
+	}
+	return true
 }
 
 func elasticsearchEnableKibanaPublicDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	return d.Get("enable_kibana_public_network").(bool) == false
+	if v, ok := d.GetOkExists("enable_kibana_public_network"); ok && v.(bool) == true {
+		return false
+	}
+	return true
 }
 
 func elasticsearchEnableKibanaPrivateDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	return d.Get("enable_kibana_private_network").(bool) == false
+	if v, ok := d.GetOkExists("enable_kibana_private_network"); ok && v.(bool) == true {
+		return false
+	}
+	return true
 }
 
 func ecsNotAutoRenewDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
@@ -327,6 +361,81 @@ func polardbPostPaidAndRenewDiffSuppressFunc(k, old, new string, d *schema.Resou
 	return true
 }
 
+func polardbTDEAndEnabledDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if v, ok := d.GetOk("tde_status"); ok && v.(string) == "Enabled" && old != "" && new != "" && old != new {
+		return true
+	}
+	return false
+}
+
+func polardbStorageTypeDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if v, ok := d.GetOk("creation_category"); ok && v.(string) == "SENormal" {
+		if w, ok := d.GetOk("storage_type"); ok && w.(string) == "ESSDAUTOPL" {
+			return false
+		}
+	}
+	return true
+}
+
+func polardbServrelessTypeDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if d.Get("db_type").(string) == "MySQL" && (d.Get("db_version").(string) == "8.0" || d.Get("db_version").(string) == "5.7") {
+		if d.Get("serverless_type").(string) == "AgileServerless" || (d.Get("serverless_type").(string) == "SteadyServerless" && d.Get("serverless_steady_switch").(string) == "ON") {
+			return false
+		}
+	} else if d.Get("db_type").(string) == "PostgreSQL" && d.Get("db_version").(string) == "14" {
+		if d.Get("serverless_type").(string) == "AgileServerless" {
+			return false
+		}
+	}
+	return true
+}
+
+func polardbProxyClassDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if v, ok := d.GetOk("creation_category"); ok && v.(string) == "SENormal" {
+		return false
+	}
+	return true
+}
+
+func polardbProxyTypeDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if d.Get("creation_category").(string) == "SENormal" || d.Get("creation_category").(string) == "Normal" {
+		return false
+	}
+	return true
+}
+
+func polardbDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	creationOption, optionOk := d.GetOk("creation_option")
+	if dbType, ok := d.GetOk("db_type"); ok && dbType.(string) == "MySQL" && (creationOption == "Normal" || !optionOk) {
+		return false
+	}
+	return true
+}
+
+func polardbXengineDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	creationOption, optionOk := d.GetOk("creation_option")
+	if dbType, ok := d.GetOk("db_type"); ok && dbType.(string) == "MySQL" && d.Get("db_version").(string) == "8.0" && (creationOption != "CreateGdnStandby" || !optionOk) {
+		return false
+	}
+	return true
+}
+
+func polardbAndCreationDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	creationCategory, categoryOk := d.GetOk("creation_category")
+	if dbType, ok := d.GetOk("db_type"); ok && dbType.(string) == "MySQL" && (creationCategory == "Normal" || creationCategory == "NormalMultimaster" || !categoryOk) {
+		return false
+	}
+	return true
+}
+
+func polardbCompressStorageDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	creationOption, optionOk := d.GetOk("creation_option")
+	if dbType, ok := d.GetOk("db_type"); ok && dbType.(string) == "MySQL" && (creationOption == "Normal" || !optionOk) && d.Get("storage_type").(string) == "PSL4" {
+		return false
+	}
+	return true
+}
+
 func adbPostPaidAndRenewDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	if v, ok := d.GetOk("pay_type"); ok && v.(string) == "PrePaid" && d.Get("renewal_status").(string) != string(RenewNotRenewal) {
 		return false
@@ -347,14 +456,16 @@ func adbPostPaidDiffSuppressFunc(k, old, new string, d *schema.ResourceData) boo
 }
 
 func ecsSpotStrategyDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	if d.Get("instance_charge_type").(string) == string(PostPaid) {
+	value, ok := d.GetOk("instance_charge_type")
+	if !ok || value == string(PostPaid) {
 		return false
 	}
 	return true
 }
 
 func ecsSpotPriceLimitDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
-	if d.Get("instance_charge_type").(string) == "PostPaid" && d.Get("spot_strategy").(string) == "SpotWithPriceLimit" {
+	value, ok := d.GetOk("instance_charge_type")
+	if (!ok || value == "PostPaid") && d.Get("spot_strategy").(string) == "SpotWithPriceLimit" {
 		return false
 	}
 	return true
@@ -511,6 +622,13 @@ func sagClientUserPasswordSuppressFunc(k, old, new string, d *schema.ResourceDat
 	return false
 }
 
+func selectdbPostPaidDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if d.Get("payment_type").(string) == "Subscription" {
+		return false
+	}
+	return true
+}
+
 func cmsClientInfoSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	for _, v := range d.Get("escalations_info").([]interface{}) {
 		mapping := v.(map[string]interface{})
@@ -603,6 +721,13 @@ func sslEnabledDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool
 	return true
 }
 
+func sslActionDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if v, ok := d.GetOk("ssl_action"); ok && (v.(string) == "Open" || v.(string) == "Update") {
+		return false
+	}
+	return true
+}
+
 func securityIpsDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	if v, ok := d.GetOk("security_ips"); ok && len(v.(*schema.Set).List()) > 0 {
 		return false
@@ -613,6 +738,15 @@ func securityIpsDiffSuppressFunc(k, old, new string, d *schema.ResourceData) boo
 func kernelVersionDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	if v, ok := d.GetOk("upgrade_db_instance_kernel_version"); ok && v.(bool) == true {
 		return false
+	}
+	return true
+}
+
+func kernelSmallVersionDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if d.HasChange("target_minor_version") {
+		if v, ok := d.GetOk("target_minor_version"); ok && v.(string) != "" {
+			return false
+		}
 	}
 	return true
 }
@@ -648,4 +782,18 @@ func CmsAlarmDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
 	sort.Strings(oldvlist)
 	return strings.Join(newvlist, " ") == strings.Join(oldvlist, " ")
 
+}
+
+func esDataNodeDiskPerformanceLevelDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if v, ok := d.GetOk("data_node_disk_type"); ok && v.(string) != "cloud_essd" {
+		return true
+	}
+	return false
+}
+
+func UpperLowerCaseDiffSuppressFunc(k, old, new string, d *schema.ResourceData) bool {
+	if strings.ToLower(old) == strings.ToLower(new) {
+		return true
+	}
+	return false
 }

@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAccAlicloudServiceMeshUserPermission_basic0(t *testing.T) {
+func TestAccAliCloudServiceMeshUserPermission_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_service_mesh_user_permission.default"
-	ra := resourceAttrInit(resourceId, AlicloudServiceMeshServiceMeshMap0)
+	ra := resourceAttrInit(resourceId, AlicloudServiceMeshUserPermissionMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &ServicemeshService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeUserPermissions")
@@ -33,6 +33,7 @@ func TestAccAlicloudServiceMeshUserPermission_basic0(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, false, connectivity.ServiceMeshStandardUnsupportedRegions)
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -120,7 +121,7 @@ data "alicloud_zones" "default" {
 	available_resource_creation= "VSwitch"
 }
 data "alicloud_vpcs" "default" {
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vswitches" "default" {
@@ -222,7 +223,7 @@ func TestUnitAlicloudServiceMeshUserPermission(t *testing.T) {
 				Message: String("loadEndpoint error"),
 			}
 		})
-		err := resourceAlicloudServiceMeshUserPermissionCreate(dInit, rawClient)
+		err := resourceAliCloudServiceMeshUserPermissionCreate(dInit, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 		ReadMockResponseDiff = map[string]interface{}{}
@@ -245,7 +246,7 @@ func TestUnitAlicloudServiceMeshUserPermission(t *testing.T) {
 				}
 				return ReadMockResponse, nil
 			})
-			err := resourceAlicloudServiceMeshUserPermissionCreate(dInit, rawClient)
+			err := resourceAliCloudServiceMeshUserPermissionCreate(dInit, rawClient)
 			patches.Reset()
 			switch errorCode {
 			case "NonRetryableError":
@@ -272,7 +273,7 @@ func TestUnitAlicloudServiceMeshUserPermission(t *testing.T) {
 				Message: String("loadEndpoint error"),
 			}
 		})
-		err := resourceAlicloudServiceMeshUserPermissionUpdate(dExisted, rawClient)
+		err := resourceAliCloudServiceMeshUserPermissionUpdate(dExisted, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 		attributesDiff := map[string]interface{}{
@@ -320,7 +321,7 @@ func TestUnitAlicloudServiceMeshUserPermission(t *testing.T) {
 				}
 				return ReadMockResponse, nil
 			})
-			err := resourceAlicloudServiceMeshUserPermissionUpdate(dExisted, rawClient)
+			err := resourceAliCloudServiceMeshUserPermissionUpdate(dExisted, rawClient)
 			patches.Reset()
 			switch errorCode {
 			case "NonRetryableError":

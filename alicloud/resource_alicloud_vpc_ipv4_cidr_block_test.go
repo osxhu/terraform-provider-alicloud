@@ -19,12 +19,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
 
-func TestAccAlicloudVPCIpv4CidrBlock_basic0(t *testing.T) {
+func TestAccAliCloudVPCIpv4CidrBlock_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_vpc_ipv4_cidr_block.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCIpv4CidrBlockMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcIpv4CidrBlock")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -41,12 +41,12 @@ func TestAccAlicloudVPCIpv4CidrBlock_basic0(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"secondary_cidr_block": "192.163.0.0/16",
-					"vpc_id":               "${data.alicloud_vpcs.default.ids.0}",
+					"secondary_cidr_block": "192.164.0.0/16",
+					"vpc_id":               "${alicloud_vpc.defaultvpc.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"secondary_cidr_block": "192.163.0.0/16",
+						"secondary_cidr_block": "192.164.0.0/16",
 						"vpc_id":               CHECKSET,
 					}),
 				),
@@ -71,7 +71,11 @@ variable "name" {
   default = "%s"
 }
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+    name_regex = "^default-NODELETING$"
+}
+
+resource "alicloud_vpc" "defaultvpc" {
+  description = var.name
 }
 `, name)
 }
@@ -151,7 +155,7 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcIpv4CidrBlockCreate(dInit, rawClient)
+	err = resourceAliCloudVpcIpv4CidrBlockCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff := map[string]interface{}{}
@@ -174,7 +178,7 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcIpv4CidrBlockCreate(dInit, rawClient)
+		err := resourceAliCloudVpcIpv4CidrBlockCreate(dInit, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -219,7 +223,7 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcIpv4CidrBlockRead(dExisted, rawClient)
+		err := resourceAliCloudVpcIpv4CidrBlockRead(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -238,7 +242,7 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcIpv4CidrBlockDelete(dExisted, rawClient)
+	err = resourceAliCloudVpcIpv4CidrBlockDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff = map[string]interface{}{}
@@ -266,7 +270,7 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcIpv4CidrBlockDelete(dExisted, rawClient)
+		err := resourceAliCloudVpcIpv4CidrBlockDelete(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -276,3 +280,87 @@ func TestUnitAccAlicloudVpcIpv4CidrBlock(t *testing.T) {
 		}
 	}
 }
+
+// Test Vpc Ipv4CidrBlock. >>> Resource test cases, automatically generated.
+// Case Ipv4CidrBlock资源测试用例_通过ipamPool添加地址段_mask 9804
+func TestAccAliCloudVpcIpv4CidrBlock_basic9804(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_ipv4_cidr_block.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcIpv4CidrBlockMap9804)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcIpv4CidrBlock")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcipv4cidrblock%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcIpv4CidrBlockBasicDependence9804)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"ap-southeast-3"})
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"vpc_id":              "${alicloud_vpc.vpc.id}",
+					"ipv4_ipam_pool_id":   "${alicloud_vpc_ipam_ipam_pool_cidr.defaultIpamPoolCidr.ipam_pool_id}",
+					"secondary_cidr_mask": "16",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"vpc_id":              CHECKSET,
+						"ipv4_ipam_pool_id":   CHECKSET,
+						"secondary_cidr_mask": "16",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"ipv4_ipam_pool_id", "secondary_cidr_mask"},
+			},
+		},
+	})
+}
+
+var AlicloudVpcIpv4CidrBlockMap9804 = map[string]string{
+	"region_id": CHECKSET,
+}
+
+func AlicloudVpcIpv4CidrBlockBasicDependence9804(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+resource "alicloud_vpc" "vpc" {
+  cidr_block = "192.168.0.0/16"
+}
+
+resource "alicloud_vpc_ipam_ipam" "defaultIpam" {
+  operating_region_list = ["ap-southeast-3"]
+  ipam_name             = format("%%s1", var.name)
+}
+
+resource "alicloud_vpc_ipam_ipam_pool" "defaultIpamPool" {
+  ipam_scope_id         = alicloud_vpc_ipam_ipam.defaultIpam.private_default_scope_id
+  ipam_pool_description = "This is the ipam pool for testing the vpc ipv4 cidr block."
+  pool_region_id        = alicloud_vpc_ipam_ipam.defaultIpam.region_id
+  ip_version            = "IPv4"
+}
+
+resource "alicloud_vpc_ipam_ipam_pool_cidr" "defaultIpamPoolCidr" {
+  cidr         = "10.0.0.0/8"
+  ipam_pool_id = alicloud_vpc_ipam_ipam_pool.defaultIpamPool.id
+}
+
+
+`, name)
+}
+
+// Test Vpc Ipv4CidrBlock. <<< Resource test cases, automatically generated.

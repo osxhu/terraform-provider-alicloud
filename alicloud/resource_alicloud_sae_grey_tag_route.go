@@ -5,20 +5,17 @@ import (
 	"log"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
-
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
-func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
+func resourceAliCloudSaeGreyTagRoute() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAlicloudSaeGreyTagRouteCreate,
-		Read:   resourceAlicloudSaeGreyTagRouteRead,
-		Update: resourceAlicloudSaeGreyTagRouteUpdate,
-		Delete: resourceAlicloudSaeGreyTagRouteDelete,
+		Create: resourceAliCloudSaeGreyTagRouteCreate,
+		Read:   resourceAliCloudSaeGreyTagRouteRead,
+		Update: resourceAliCloudSaeGreyTagRouteUpdate,
+		Delete: resourceAliCloudSaeGreyTagRouteDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
@@ -33,28 +30,47 @@ func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"dubbo_rules": {
+			"grey_tag_route_name": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
+			"description": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"sc_rules": {
 				Type:     schema.TypeSet,
 				Optional: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"path": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"condition": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							ValidateFunc: StringInSlice([]string{"AND", "OR"}, false),
+						},
 						"items": {
 							Type:     schema.TypeSet,
 							Optional: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"index": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-									"expr": {
+									"name": {
 										Type:     schema.TypeString,
 										Optional: true,
+									},
+									"type": {
+										Type:         schema.TypeString,
+										Optional:     true,
+										ValidateFunc: StringInSlice([]string{"param", "cookie", "header"}, false),
 									},
 									"cond": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{">", "<", ">=", "<=", "==", "!="}, false),
+										ValidateFunc: StringInSlice([]string{">", "<", ">=", "<=", "==", "!="}, false),
 									},
 									"value": {
 										Type:     schema.TypeString,
@@ -63,11 +79,19 @@ func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
 									"operator": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{"rawvalue", "list", "mod", "deterministic_proportional_steaming_division"}, false),
+										ValidateFunc: StringInSlice([]string{"rawvalue", "list", "mod", "deterministic_proportional_steaming_division"}, false),
 									},
 								},
 							},
 						},
+					},
+				},
+			},
+			"dubbo_rules": {
+				Type:     schema.TypeSet,
+				Optional: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
 						"method_name": {
 							Type:     schema.TypeString,
 							Optional: true,
@@ -87,43 +111,25 @@ func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
 						"condition": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validation.StringInSlice([]string{"AND", "OR"}, false),
+							ValidateFunc: StringInSlice([]string{"AND", "OR"}, false),
 						},
-					},
-				},
-			},
-			"description": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"grey_tag_route_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-			},
-			"sc_rules": {
-				Type:     schema.TypeSet,
-				Optional: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
 						"items": {
 							Type:     schema.TypeSet,
 							Optional: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"name": {
+									"index": {
+										Type:     schema.TypeInt,
+										Optional: true,
+									},
+									"expr": {
 										Type:     schema.TypeString,
 										Optional: true,
 									},
 									"cond": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{">", "<", ">=", "<=", "==", "!="}, false),
-									},
-									"type": {
-										Type:         schema.TypeString,
-										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{"param", "cookie", "header"}, false),
+										ValidateFunc: StringInSlice([]string{">", "<", ">=", "<=", "==", "!="}, false),
 									},
 									"value": {
 										Type:     schema.TypeString,
@@ -132,19 +138,10 @@ func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
 									"operator": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validation.StringInSlice([]string{"rawvalue", "list", "mod", "deterministic_proportional_steaming_division"}, false),
+										ValidateFunc: StringInSlice([]string{"rawvalue", "list", "mod", "deterministic_proportional_steaming_division"}, false),
 									},
 								},
 							},
-						},
-						"path": {
-							Type:     schema.TypeString,
-							Optional: true,
-						},
-						"condition": {
-							Type:         schema.TypeString,
-							Optional:     true,
-							ValidateFunc: validation.StringInSlice([]string{"AND", "OR"}, false),
 						},
 					},
 				},
@@ -153,15 +150,12 @@ func resourceAlicloudSaeGreyTagRoute() *schema.Resource {
 	}
 }
 
-func resourceAlicloudSaeGreyTagRouteCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSaeGreyTagRouteCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
 	action := "/pop/v1/sam/tagroute/greyTagRoute"
 	request := make(map[string]*string)
-	conn, err := client.NewServerlessClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["AppId"] = StringPointer(d.Get("app_id").(string))
 	if v, ok := d.GetOk("description"); ok {
 		request["Description"] = StringPointer(v.(string))
@@ -221,7 +215,7 @@ func resourceAlicloudSaeGreyTagRouteCreate(d *schema.ResourceData, meta interfac
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer("2019-05-06"), nil, StringPointer("POST"), StringPointer("AK"), StringPointer(action), request, nil, nil, &util.RuntimeOptions{})
+		response, err = client.RoaPost("sae", "2019-05-06", action, request, nil, nil, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -234,21 +228,12 @@ func resourceAlicloudSaeGreyTagRouteCreate(d *schema.ResourceData, meta interfac
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_sae_grey_tag_route", "POST "+action, AlibabaCloudSdkGoERROR)
 	}
-	if respBody, isExist := response["body"]; isExist {
-		response = respBody.(map[string]interface{})
-	} else {
-		return WrapError(fmt.Errorf("%s failed, response: %v", "POST "+action, response))
-	}
-	addDebug(action, response, request)
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", "POST "+action, response))
-	}
 	responseData := response["Data"].(map[string]interface{})
 	d.SetId(fmt.Sprint(responseData["GreyTagRouteId"]))
 
-	return resourceAlicloudSaeGreyTagRouteRead(d, meta)
+	return resourceAliCloudSaeGreyTagRouteRead(d, meta)
 }
-func resourceAlicloudSaeGreyTagRouteRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSaeGreyTagRouteRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	saeService := SaeService{client}
 	object, err := saeService.DescribeSaeGreyTagRoute(d.Id())
@@ -319,85 +304,86 @@ func resourceAlicloudSaeGreyTagRouteRead(d *schema.ResourceData, meta interface{
 
 	return nil
 }
-func resourceAlicloudSaeGreyTagRouteUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSaeGreyTagRouteUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
+	var err error
 	update := false
 	request := map[string]*string{
 		"GreyTagRouteId": StringPointer(d.Id()),
 	}
-	if d.HasChange("sc_rules") {
-		update = true
-		if v, ok := d.GetOk("sc_rules"); ok {
-			scRulesMaps := make([]map[string]interface{}, 0)
-			for _, scRules := range v.(*schema.Set).List() {
-				scRulesArg := scRules.(map[string]interface{})
-				scRulesMap := map[string]interface{}{}
-				scRulesMap["path"] = scRulesArg["path"]
-				scRulesMap["condition"] = scRulesArg["condition"]
-				itemsMaps := make([]map[string]interface{}, 0)
-				for _, items := range scRulesArg["items"].(*schema.Set).List() {
-					itemsArg := items.(map[string]interface{})
-					itemsMap := map[string]interface{}{}
-					itemsMap["name"] = itemsArg["name"]
-					itemsMap["cond"] = itemsArg["cond"]
-					itemsMap["type"] = itemsArg["type"]
-					itemsMap["value"] = itemsArg["value"]
-					itemsMap["operator"] = itemsArg["operator"]
-					itemsMaps = append(itemsMaps, itemsMap)
-				}
-				scRulesMap["items"] = itemsMaps
-				scRulesMaps = append(scRulesMaps, scRulesMap)
-			}
-			scRulesMapsStrting, _ := convertListMapToJsonString(scRulesMaps)
-			request["ScRules"] = StringPointer(scRulesMapsStrting)
-		}
-	}
-	if d.HasChange("dubbo_rules") {
-		update = true
-		if v, ok := d.GetOk("dubbo_rules"); ok {
-			dubboRulesMaps := make([]map[string]interface{}, 0)
-			for _, dubboRules := range v.(*schema.Set).List() {
-				dubboRulesArg := dubboRules.(map[string]interface{})
-				dubboRulesMap := map[string]interface{}{}
-				dubboRulesMap["condition"] = dubboRulesArg["condition"]
-				dubboRulesMap["methodName"] = dubboRulesArg["method_name"]
-				dubboRulesMap["serviceName"] = dubboRulesArg["service_name"]
-				dubboRulesMap["version"] = dubboRulesArg["version"]
-				dubboRulesMap["group"] = dubboRulesArg["group"]
-				itemsMaps := make([]map[string]interface{}, 0)
-				for _, items := range dubboRulesArg["items"].(*schema.Set).List() {
-					itemsArg := items.(map[string]interface{})
-					itemsMap := map[string]interface{}{}
-					itemsMap["index"] = itemsArg["index"]
-					itemsMap["expr"] = itemsArg["expr"]
-					itemsMap["cond"] = itemsArg["cond"]
-					itemsMap["value"] = itemsArg["value"]
-					itemsMap["operator"] = itemsArg["operator"]
-					itemsMaps = append(itemsMaps, itemsMap)
-				}
-				dubboRulesMap["items"] = itemsMaps
-				dubboRulesMaps = append(dubboRulesMaps, dubboRulesMap)
-			}
-			dubboRulesMapsStrting, _ := convertListMapToJsonString(dubboRulesMaps)
-			request["DubboRules"] = StringPointer(dubboRulesMapsStrting)
-		}
-	}
+
 	if d.HasChange("description") {
 		update = true
-		if v, ok := d.GetOk("description"); ok {
-			request["Description"] = StringPointer(v.(string))
-		}
 	}
+	if v, ok := d.GetOk("description"); ok {
+		request["Description"] = StringPointer(v.(string))
+	}
+
+	if d.HasChange("sc_rules") {
+		update = true
+	}
+	if v, ok := d.GetOk("sc_rules"); ok {
+		scRulesMaps := make([]map[string]interface{}, 0)
+		for _, scRules := range v.(*schema.Set).List() {
+			scRulesArg := scRules.(map[string]interface{})
+			scRulesMap := map[string]interface{}{}
+			scRulesMap["path"] = scRulesArg["path"]
+			scRulesMap["condition"] = scRulesArg["condition"]
+			itemsMaps := make([]map[string]interface{}, 0)
+			for _, items := range scRulesArg["items"].(*schema.Set).List() {
+				itemsArg := items.(map[string]interface{})
+				itemsMap := map[string]interface{}{}
+				itemsMap["name"] = itemsArg["name"]
+				itemsMap["cond"] = itemsArg["cond"]
+				itemsMap["type"] = itemsArg["type"]
+				itemsMap["value"] = itemsArg["value"]
+				itemsMap["operator"] = itemsArg["operator"]
+				itemsMaps = append(itemsMaps, itemsMap)
+			}
+			scRulesMap["items"] = itemsMaps
+			scRulesMaps = append(scRulesMaps, scRulesMap)
+		}
+		scRulesMapsStrting, _ := convertListMapToJsonString(scRulesMaps)
+		request["ScRules"] = StringPointer(scRulesMapsStrting)
+	}
+
+	if d.HasChange("dubbo_rules") {
+		update = true
+	}
+	if v, ok := d.GetOk("dubbo_rules"); ok {
+		dubboRulesMaps := make([]map[string]interface{}, 0)
+		for _, dubboRules := range v.(*schema.Set).List() {
+			dubboRulesArg := dubboRules.(map[string]interface{})
+			dubboRulesMap := map[string]interface{}{}
+			dubboRulesMap["condition"] = dubboRulesArg["condition"]
+			dubboRulesMap["methodName"] = dubboRulesArg["method_name"]
+			dubboRulesMap["serviceName"] = dubboRulesArg["service_name"]
+			dubboRulesMap["version"] = dubboRulesArg["version"]
+			dubboRulesMap["group"] = dubboRulesArg["group"]
+			itemsMaps := make([]map[string]interface{}, 0)
+			for _, items := range dubboRulesArg["items"].(*schema.Set).List() {
+				itemsArg := items.(map[string]interface{})
+				itemsMap := map[string]interface{}{}
+				itemsMap["index"] = itemsArg["index"]
+				itemsMap["expr"] = itemsArg["expr"]
+				itemsMap["cond"] = itemsArg["cond"]
+				itemsMap["value"] = itemsArg["value"]
+				itemsMap["operator"] = itemsArg["operator"]
+				itemsMaps = append(itemsMaps, itemsMap)
+			}
+			dubboRulesMap["items"] = itemsMaps
+			dubboRulesMaps = append(dubboRulesMaps, dubboRulesMap)
+		}
+		dubboRulesMapsStrting, _ := convertListMapToJsonString(dubboRulesMaps)
+		request["DubboRules"] = StringPointer(dubboRulesMapsStrting)
+	}
+
 	if update {
 		action := "/pop/v1/sam/tagroute/greyTagRoute"
-		conn, err := client.NewServerlessClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer("2019-05-06"), nil, StringPointer("PUT"), StringPointer("AK"), StringPointer(action), request, nil, nil, &util.RuntimeOptions{})
+			response, err = client.RoaPut("sae", "2019-05-06", action, request, nil, nil, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -410,33 +396,22 @@ func resourceAlicloudSaeGreyTagRouteUpdate(d *schema.ResourceData, meta interfac
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), "PUT "+action, AlibabaCloudSdkGoERROR)
 		}
-		if respBody, isExist := response["body"]; isExist {
-			response = respBody.(map[string]interface{})
-		} else {
-			return WrapError(fmt.Errorf("%s failed, response: %v", "Put "+action, response))
-		}
 		addDebug(action, response, request)
-		if fmt.Sprint(response["Success"]) == "false" {
-			return WrapError(fmt.Errorf("%s failed, response: %v", "Put "+action, response))
-		}
 	}
-	return resourceAlicloudSaeGreyTagRouteRead(d, meta)
+	return resourceAliCloudSaeGreyTagRouteRead(d, meta)
 }
-func resourceAlicloudSaeGreyTagRouteDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSaeGreyTagRouteDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	action := "/pop/v1/sam/tagroute/greyTagRoute"
 	var response map[string]interface{}
-	conn, err := client.NewServerlessClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]*string{
 		"GreyTagRouteId": StringPointer(d.Id()),
 	}
 
 	wait := incrementalWait(3*time.Second, 1*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer("2019-05-06"), nil, StringPointer("DELETE"), StringPointer("AK"), StringPointer(action), request, nil, nil, &util.RuntimeOptions{})
+		response, err = client.RoaDelete("sae", "2019-05-06", action, request, nil, nil, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -449,14 +424,6 @@ func resourceAlicloudSaeGreyTagRouteDelete(d *schema.ResourceData, meta interfac
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "DELETE "+action, AlibabaCloudSdkGoERROR)
 	}
-	if respBody, isExist := response["body"]; isExist {
-		response = respBody.(map[string]interface{})
-	} else {
-		return WrapError(fmt.Errorf("%s failed, response: %v", "DELETE "+action, response))
-	}
 	addDebug(action, response, request)
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", "AlicloudSaeGreyTagRouteDelete", response))
-	}
 	return nil
 }

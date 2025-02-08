@@ -33,34 +33,26 @@ func init() {
 }
 
 func testSweepVpcPeerConnection(region string) error {
-
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return fmt.Errorf("error getting Alicloud client: %s", err)
+		return fmt.Errorf("error getting AliCloud client: %s", err)
 	}
-	aliyunClient := rawClient.(*connectivity.AliyunClient)
+	client := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
 		"tf-testAcc",
 		"tf_testAcc",
 	}
 	action := "ListVpcPeerConnections"
 	request := map[string]interface{}{}
-	request["RegionId"] = aliyunClient.RegionId
+	request["RegionId"] = client.RegionId
 
 	request["MaxResults"] = PageSizeLarge
 
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewVpcpeerClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2022-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("VpcPeer", "2022-01-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -88,9 +80,12 @@ func testSweepVpcPeerConnection(region string) error {
 
 			skip := true
 			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(item["Name"].(string)), strings.ToLower(prefix)) {
+				if item["Name"] == nil || strings.HasPrefix(strings.ToLower(item["Name"].(string)), strings.ToLower(prefix)) {
 					skip = false
 				}
+			}
+			if item["Name"] == nil {
+				item["Name"] = ""
 			}
 			if skip {
 				log.Printf("[INFO] Skipping Vpc Peer Connection: %s", item["Name"].(string))
@@ -100,7 +95,7 @@ func testSweepVpcPeerConnection(region string) error {
 			request := map[string]interface{}{
 				"InstanceId": item["InstanceId"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2022-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("VpcPeer", "2022-01-01", action, nil, request, true)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Vpc Peer Connection (%s): %s", item["Name"].(string), err)
 			}
@@ -115,9 +110,186 @@ func testSweepVpcPeerConnection(region string) error {
 	return nil
 }
 
-func TestAccAlicloudVPCPeerConnection_basic0(t *testing.T) {
+func TestAccAliCloudVPCPeerConnection_basic0(t *testing.T) {
+	var v map[string]interface{}
 	resourceId := "alicloud_vpc_peer_connection.default"
-	ra := resourceAttrInit(resourceId, AlicloudVPCPeerConnectionMap0)
+	ra := resourceAttrInit(resourceId, AliCloudVPCPeerConnectionMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPeerConnection")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcpeerconnection%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudVPCPeerConnectionBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"vpc_id":              "${alicloud_vpc.requesting.id}",
+					"accepting_vpc_id":    "${alicloud_vpc.accepting.id}",
+					"accepting_region_id": "${data.alicloud_regions.default.regions.0.id}",
+					"accepting_ali_uid":   "${data.alicloud_account.default.id}",
+					//"link_type":           "Gold",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"vpc_id":              CHECKSET,
+						"accepting_vpc_id":    CHECKSET,
+						"accepting_region_id": CHECKSET,
+						"accepting_ali_uid":   CHECKSET,
+						//"link_type":           "Gold",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					//"link_type":         "Silver",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+						//"link_type":         "Silver",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"peer_connection_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"peer_connection_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"status": "Activated",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"status": "Activated",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "PeerConnection",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "PeerConnection",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccAliCloudVPCPeerConnection_basic0_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_peer_connection.default"
+	ra := resourceAttrInit(resourceId, AliCloudVPCPeerConnectionMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPeerConnection")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcpeerconnection%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudVPCPeerConnectionBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"vpc_id":               "${alicloud_vpc.requesting.id}",
+					"accepting_vpc_id":     "${alicloud_vpc.accepting.id}",
+					"accepting_region_id":  "${data.alicloud_regions.default.regions.0.id}",
+					"accepting_ali_uid":    "${data.alicloud_account.default.id}",
+					"resource_group_id":    "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"peer_connection_name": name,
+					"description":          name,
+					"status":               "Activated",
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "PeerConnection",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"vpc_id":               CHECKSET,
+						"accepting_vpc_id":     CHECKSET,
+						"accepting_region_id":  CHECKSET,
+						"accepting_ali_uid":    CHECKSET,
+						"resource_group_id":    CHECKSET,
+						"peer_connection_name": name,
+						"description":          name,
+						"status":               "Activated",
+						"tags.%":               "2",
+						"tags.Created":         "TF",
+						"tags.For":             "PeerConnection",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccAliCloudVPCPeerConnection_basic1(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_peer_connection.default"
+	ra := resourceAttrInit(resourceId, AliCloudVPCPeerConnectionMap0)
 	var providers []*schema.Provider
 	providerFactories := map[string]terraform.ResourceProviderFactory{
 		"alicloud": func() (terraform.ResourceProvider, error) {
@@ -129,7 +301,7 @@ func TestAccAlicloudVPCPeerConnection_basic0(t *testing.T) {
 	testAccCheck := ra.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%svpcpeerconnection%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVPCPeerConnectionBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudVPCPeerConnectionBasicDependence1)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -140,24 +312,125 @@ func TestAccAlicloudVPCPeerConnection_basic0(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"peer_connection_name": "${var.name}",
-					"vpc_id":               "${data.alicloud_vpcs.default.ids.0}",
-					"accepting_ali_uid":    "${data.alicloud_account.default.id}",
-					"accepting_region_id":  "${var.accepting_region}",
-					"accepting_vpc_id":     "${data.alicloud_vpcs.default1.ids.0}",
-					"description":          "${var.name}",
-					"bandwidth":            "100",
-					"provider":             "alicloud.local",
+					"vpc_id":              "${alicloud_vpc.requesting.id}",
+					"accepting_vpc_id":    "${alicloud_vpc.accepting.id}",
+					"accepting_region_id": "${data.alicloud_regions.default.regions.0.id}",
+					"accepting_ali_uid":   "${data.alicloud_account.default.id}",
+					"force_delete":        "false",
 				}),
 				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"vpc_id":              CHECKSET,
+						"accepting_vpc_id":    CHECKSET,
+						"accepting_region_id": CHECKSET,
+						"accepting_ali_uid":   CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth": "200",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"bandwidth": "200",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"force_delete": "true",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"force_delete": "true",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"peer_connection_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
 					testAccCheck(map[string]string{
 						"peer_connection_name": name,
-						"vpc_id":               CHECKSET,
-						"accepting_ali_uid":    CHECKSET,
-						"accepting_region_id":  CHECKSET,
-						"accepting_vpc_id":     CHECKSET,
-						"description":          name,
-						"bandwidth":            "100",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"status": "Activated",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"status": "Activated",
+					}),
+				),
+			},
+			//{
+			//	Config: testAccConfig(map[string]interface{}{
+			//		"status": "Rejected",
+			//	}),
+			//	Check: resource.ComposeTestCheckFunc(
+			//		testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+			//		testAccCheck(map[string]string{
+			//			"status": "Rejected",
+			//		}),
+			//	),
+			//},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "PeerConnection",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "PeerConnection",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
 					}),
 				),
 			},
@@ -165,43 +438,141 @@ func TestAccAlicloudVPCPeerConnection_basic0(t *testing.T) {
 	})
 }
 
-var AlicloudVPCPeerConnectionMap0 = map[string]string{
-	"accepting_ali_uid": CHECKSET,
+func TestAccAliCloudVPCPeerConnection_basic1_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_peer_connection.default"
+	ra := resourceAttrInit(resourceId, AliCloudVPCPeerConnectionMap0)
+	var providers []*schema.Provider
+	providerFactories := map[string]terraform.ResourceProviderFactory{
+		"alicloud": func() (terraform.ResourceProvider, error) {
+			p := Provider()
+			providers = append(providers, p.(*schema.Provider))
+			return p, nil
+		},
+	}
+	testAccCheck := ra.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcpeerconnection%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudVPCPeerConnectionBasicDependence1)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName:     resourceId,
+		ProviderFactories: providerFactories,
+		CheckDestroy:      testAccCheckVPCPeerConnectionDestroyWithProviders(&providers),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"vpc_id":               "${alicloud_vpc.requesting.id}",
+					"accepting_vpc_id":     "${alicloud_vpc.accepting.id}",
+					"accepting_region_id":  "${data.alicloud_regions.default.regions.0.id}",
+					"accepting_ali_uid":    "${data.alicloud_account.default.id}",
+					"bandwidth":            "200",
+					"resource_group_id":    "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"peer_connection_name": name,
+					"description":          name,
+					"status":               "Activated",
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "PeerConnection",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckVPCPeerConnectionExistsWithProviders(resourceId, v, &providers),
+					testAccCheck(map[string]string{
+						"vpc_id":               CHECKSET,
+						"accepting_vpc_id":     CHECKSET,
+						"accepting_region_id":  CHECKSET,
+						"accepting_ali_uid":    CHECKSET,
+						"bandwidth":            "200",
+						"resource_group_id":    CHECKSET,
+						"peer_connection_name": name,
+						"description":          name,
+						"status":               "Activated",
+						"tags.%":               "2",
+						"tags.Created":         "TF",
+						"tags.For":             "PeerConnection",
+					}),
+				),
+			},
+		},
+	})
+}
+
+var AliCloudVPCPeerConnectionMap0 = map[string]string{
 	"bandwidth":         CHECKSET,
-	"dry_run":           NOSET,
+	"resource_group_id": CHECKSET,
 	"status":            CHECKSET,
+	"create_time":       CHECKSET,
 }
 
-func AlicloudVPCPeerConnectionBasicDependence0(name string) string {
+func AliCloudVPCPeerConnectionBasicDependence0(name string) string {
 	return fmt.Sprintf(` 
-variable "name" {
-  default = "%s"
-}
-variable "accepting_region" {
-  default = "cn-beijing"
+	variable "name" {
+  		default = "%s"
+	}
+
+	data "alicloud_regions" "default" {
+  		current = true
+	}
+
+	data "alicloud_account" "default" {
+	}
+
+	data "alicloud_resource_manager_resource_groups" "default" {
+	}
+
+	resource "alicloud_vpc" "requesting" {
+  		vpc_name    = var.name
+  		enable_ipv6 = "true"
+	}
+
+	resource "alicloud_vpc" "accepting" {
+  		vpc_name    = var.name
+  		enable_ipv6 = "true"
+	}
+`, name)
 }
 
-data "alicloud_account" "default" {}
+func AliCloudVPCPeerConnectionBasicDependence1(name string) string {
+	return fmt.Sprintf(` 
+	variable "name" {
+  		default = "%s"
+	}
 
-provider "alicloud" {
-  alias = "local"
-  region = "%s"
-}
+	provider "alicloud" {
+  		alias  = "requesting"
+  		region = "%s"
+	}
 
-provider "alicloud" {
-  alias = "accepting"
-  region = var.accepting_region
-}
+	provider "alicloud" {
+  		alias  = "accepting"
+  		region = "cn-hangzhou"
+	}
 
-data "alicloud_vpcs" "default" {
-	provider = alicloud.local
-	name_regex = "default-NODELETING"
-}
+	data "alicloud_regions" "default" {
+  		provider = alicloud.accepting
+  		current  = true
+	}
 
-data "alicloud_vpcs" "default1" {
-	provider = alicloud.accepting
-	name_regex = "default-NODELETING"
-}
+	data "alicloud_account" "default" {
+	}
+
+	data "alicloud_resource_manager_resource_groups" "default" {
+	}
+
+	resource "alicloud_vpc" "requesting" {
+  		provider    = alicloud.requesting
+  		vpc_name    = var.name
+  		enable_ipv6 = "true"
+	}
+
+	resource "alicloud_vpc" "accepting" {
+  		provider    = alicloud.accepting
+  		vpc_name    = var.name
+  		enable_ipv6 = "true"
+	}
 `, name, defaultRegionToTest)
 }
 
@@ -211,6 +582,7 @@ func testAccCheckVPCPeerConnectionDestroyWithProviders(providers *[]*schema.Prov
 			if provider.Meta() == nil {
 				continue
 			}
+
 			if err := testAccCheckVPCPeerConnectionDestroyWithProvider(s, provider); err != nil {
 				return err
 			}
@@ -221,14 +593,14 @@ func testAccCheckVPCPeerConnectionDestroyWithProviders(providers *[]*schema.Prov
 
 func testAccCheckVPCPeerConnectionDestroyWithProvider(s *terraform.State, provider *schema.Provider) error {
 	client := provider.Meta().(*connectivity.AliyunClient)
-	vpcPeerService := VpcPeerService{client}
+	vpcServiceV2 := VpcServiceV2{client}
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "alicloud_vpc_peer_connection" {
 			continue
 		}
 
-		_, err := vpcPeerService.DescribeVpcPeerConnection(rs.Primary.ID)
+		_, err := vpcServiceV2.DescribeVpcPeerConnection(rs.Primary.ID)
 		if err != nil {
 			if NotFoundError(err) {
 				continue
@@ -240,92 +612,43 @@ func testAccCheckVPCPeerConnectionDestroyWithProvider(s *terraform.State, provid
 	return nil
 }
 
-func TestAccAlicloudVPCPeerConnection_basic1(t *testing.T) {
-	resourceId := "alicloud_vpc_peer_connection.default"
-	ra := resourceAttrInit(resourceId, AlicloudVPCPeerConnectionMap0)
-	var providers []*schema.Provider
-	providerFactories := map[string]terraform.ResourceProviderFactory{
-		"alicloud": func() (terraform.ResourceProvider, error) {
-			p := Provider()
-			providers = append(providers, p.(*schema.Provider))
-			return p, nil
-		},
+func testAccCheckVPCPeerConnectionExistsWithProviders(n string, res map[string]interface{}, providers *[]*schema.Provider) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[n]
+		if !ok {
+			return fmt.Errorf("Not found: %s", n)
+		}
+
+		if rs.Primary.ID == "" {
+			return fmt.Errorf("No alicloud_vpc_peer_connection id is set")
+		}
+
+		for _, provider := range *providers {
+			if provider.Meta() == nil {
+				continue
+			}
+
+			client := provider.Meta().(*connectivity.AliyunClient)
+			vpcServiceV2 := VpcServiceV2{client}
+
+			resp, err := vpcServiceV2.DescribeVpcPeerConnection(rs.Primary.ID)
+			if err != nil {
+				if NotFoundError(err) {
+					continue
+				}
+				return err
+			}
+
+			res = resp
+
+			return nil
+		}
+
+		return fmt.Errorf("alicloud_vpc_peer_connection not found")
 	}
-	testAccCheck := ra.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
-	name := fmt.Sprintf("tf-testacc%svpcpeerconnection%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVPCPeerConnectionBasicDependence0)
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() {
-			testAccPreCheck(t)
-		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: providerFactories,
-		CheckDestroy:      testAccCheckVPCPeerConnectionDestroyWithProviders(&providers),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"vpc_id":              "${data.alicloud_vpcs.default.ids.0}",
-					"accepting_ali_uid":   "${data.alicloud_account.default.id}",
-					"accepting_region_id": "${var.accepting_region}",
-					"accepting_vpc_id":    "${data.alicloud_vpcs.default1.ids.0}",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"vpc_id":              CHECKSET,
-						"accepting_ali_uid":   CHECKSET,
-						"accepting_region_id": CHECKSET,
-						"accepting_vpc_id":    CHECKSET,
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"peer_connection_name": "${var.name}_update",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"peer_connection_name": name + "_update",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"description": "${var.name}_update",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"description": name + "_update",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"bandwidth": "200",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"bandwidth": "200",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"peer_connection_name": "${var.name}",
-					"description":          "${var.name}",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"peer_connection_name": name,
-						"description":          name,
-					}),
-				),
-			},
-		},
-	})
 }
 
-func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
+func TestUnitAccAliCloudVpcPeerConnection(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_vpc_peer_connection"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_vpc_peer_connection"].Schema).Data(nil, nil)
@@ -403,7 +726,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcPeerConnectionCreate(dInit, rawClient)
+	err = resourceAliCloudVpcPeerPeerConnectionCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff := map[string]interface{}{}
@@ -426,7 +749,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPeerConnectionCreate(dInit, rawClient)
+		err := resourceAliCloudVpcPeerPeerConnectionCreate(dInit, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -453,7 +776,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcPeerConnectionUpdate(dExisted, rawClient)
+	err = resourceAliCloudVpcPeerPeerConnectionUpdate(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff := map[string]interface{}{
@@ -489,7 +812,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPeerConnectionUpdate(dExisted, rawClient)
+		err := resourceAliCloudVpcPeerPeerConnectionUpdate(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -533,7 +856,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPeerConnectionRead(dExisted, rawClient)
+		err := resourceAliCloudVpcPeerPeerConnectionRead(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -552,7 +875,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcPeerConnectionDelete(dExisted, rawClient)
+	err = resourceAliCloudVpcPeerPeerConnectionDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff = map[string]interface{}{}
@@ -583,7 +906,7 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPeerConnectionDelete(dExisted, rawClient)
+		err := resourceAliCloudVpcPeerPeerConnectionDelete(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -593,3 +916,139 @@ func TestUnitAccAlicloudVpcPeerConnection(t *testing.T) {
 		}
 	}
 }
+
+// Test VpcPeer PeerConnection. >>> Resource test cases, automatically generated.
+// Case 接入TF 7960
+func TestAccAliCloudVpcPeerPeerConnection_basic7960(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_peer_connection.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcPeerPeerConnectionMap7960)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcPeerServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPeerPeerConnection")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcpeerpeerconnection%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcPeerPeerConnectionBasicDependence7960)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-beijing"})
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"accepting_vpc_id":     "${alicloud_vpc.defaultPcQrL1.id}",
+					"description":          "tf-testacc-28",
+					"vpc_id":               "${alicloud_vpc.defaultQka2zR.id}",
+					"resource_group_id":    "${data.alicloud_resource_manager_resource_groups.default.ids.0}",
+					"accepting_region_id":  defaultRegionToTest,
+					"accepting_ali_uid":    "1511928242963727",
+					"peer_connection_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"accepting_vpc_id":     CHECKSET,
+						"description":          CHECKSET,
+						"vpc_id":               CHECKSET,
+						"resource_group_id":    CHECKSET,
+						"accepting_region_id":  CHECKSET,
+						"accepting_ali_uid":    "1511928242963727",
+						"peer_connection_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": "tf-testacc-808",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run"},
+			},
+		},
+	})
+}
+
+var AlicloudVpcPeerPeerConnectionMap7960 = map[string]string{
+	"create_time": CHECKSET,
+	"region_id":   CHECKSET,
+}
+
+func AlicloudVpcPeerPeerConnectionBasicDependence7960(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+data "alicloud_resource_manager_resource_groups" "default" {}
+
+resource "alicloud_vpc" "defaultQka2zR" {
+  cidr_block = "172.16.0.0/12"
+  vpc_name   = var.name
+}
+
+resource "alicloud_vpc" "defaultPcQrL1" {
+  cidr_block = "172.16.0.0/12"
+  vpc_name   = format("%%s1", var.name)
+}
+
+
+`, name)
+}
+
+// Test VpcPeer PeerConnection. <<< Resource test cases, automatically generated.

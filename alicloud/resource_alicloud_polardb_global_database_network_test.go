@@ -37,12 +37,6 @@ func testSweepPolarDBGlobalDatabaseNetwork(region string) error {
 		return fmt.Errorf("error getting Alicloud client: %s", err)
 	}
 	client := rawClient.(*connectivity.AliyunClient)
-
-	conn, err := client.NewPolarDBClient()
-	if err != nil {
-		return WrapError(err)
-	}
-
 	prefixes := []string{
 		"tf-testAcc",
 		"tf_testAcc",
@@ -54,11 +48,9 @@ func testSweepPolarDBGlobalDatabaseNetwork(region string) error {
 	var response map[string]interface{}
 	PolarDBGlobalDatabaseNetworkIds := make([]string, 0)
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-08-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("polardb", "2017-08-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -109,7 +101,7 @@ func testSweepPolarDBGlobalDatabaseNetwork(region string) error {
 		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(3*time.Minute, func() *resource.RetryError {
-			_, err = conn.DoRequest(StringPointer(deleteAction), nil, StringPointer("POST"), StringPointer("2017-08-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("polardb", "2017-08-01", deleteAction, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -126,7 +118,7 @@ func testSweepPolarDBGlobalDatabaseNetwork(region string) error {
 	return nil
 }
 
-func TestAccAlicloudPolarDBGlobalDatabaseNetwork_basic00(t *testing.T) {
+func TestAccAliCloudPolarDBGlobalDatabaseNetwork_basic00(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_polardb_global_database_network.default"
 	ra := resourceAttrInit(resourceId, resourceAlicloudPolarDBGlobalDatabaseNetworkMap)
@@ -196,26 +188,32 @@ variable "name" {
 }
 
 data "alicloud_vpcs" "default" {
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
-data "alicloud_vswitches" "default" {
-	vpc_id = data.alicloud_vpcs.default.ids.0
+resource "alicloud_vpc" "default" {
+	vpc_name = var.name
+}
+	
+resource "alicloud_vswitch" "default" {
+	zone_id = data.alicloud_polardb_node_classes.default.classes.0.zone_id
+	vpc_id = alicloud_vpc.default.id
+	cidr_block = cidrsubnet(alicloud_vpc.default.cidr_block, 8, 4)
 }
 
 data "alicloud_polardb_node_classes" "default" {
-	zone_id    = data.alicloud_vswitches.default.vswitches.0.zone_id
 	pay_type   = "PostPaid"
 	db_type    = "MySQL"
 	db_version = "8.0"
+	category   = "Normal"
 }
 
 resource "alicloud_polardb_cluster" "default" {
 	db_type       = "MySQL"
 	db_version    = "8.0"
 	pay_type      = "PostPaid"
-	db_node_class = data.alicloud_polardb_node_classes.default.classes.0.supported_engines.0.available_resources.0.db_node_class
-	vswitch_id    = data.alicloud_vswitches.default.ids.0
+	db_node_class = data.alicloud_polardb_node_classes.default.classes.0.supported_engines.0.available_resources.2.db_node_class
+	vswitch_id    = alicloud_vswitch.default.id
 	description   = "${var.name}"
 }
 

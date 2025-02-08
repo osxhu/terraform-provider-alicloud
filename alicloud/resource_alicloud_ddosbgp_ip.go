@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -43,6 +42,12 @@ func resourceAlicloudDdosbgpIp() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"member_uid": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -52,19 +57,20 @@ func resourceAlicloudDdosbgpIpCreate(d *schema.ResourceData, meta interface{}) e
 	var response map[string]interface{}
 	action := "AddIp"
 	request := make(map[string]interface{})
-	conn, err := client.NewDdosbgpClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["InstanceId"] = d.Get("instance_id")
-	request["IpList"] = fmt.Sprintf("[{\"ip\":\"%s\"}]", d.Get("ip"))
+	if memberUid, ok := d.GetOk("member_uid"); !ok {
+		request["IpList"] = fmt.Sprintf("[{\"ip\":\"%s\"}]", d.Get("ip"))
+	} else {
+		request["IpList"] = fmt.Sprintf(`[{"ip":"%s","member_uid":"%s"}]`, d.Get("ip"), memberUid)
+	}
 	request["RegionId"] = client.RegionId
 	if v, ok := d.GetOk("resource_group_id"); ok {
 		request["ResourceGroupId"] = v
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-07-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("ddosbgp", "2018-07-20", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -102,6 +108,7 @@ func resourceAlicloudDdosbgpIpRead(d *schema.ResourceData, meta interface{}) err
 	d.Set("instance_id", parts[0])
 	d.Set("ip", object["Ip"])
 	d.Set("status", object["Status"])
+	d.Set("member_uid", object["MemberUid"])
 	return nil
 }
 func resourceAlicloudDdosbgpIpDelete(d *schema.ResourceData, meta interface{}) error {
@@ -112,10 +119,6 @@ func resourceAlicloudDdosbgpIpDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	action := "DeleteIp"
 	var response map[string]interface{}
-	conn, err := client.NewDdosbgpClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	request := map[string]interface{}{
 		"InstanceId": parts[0],
 		"IpList":     fmt.Sprintf("[{\"ip\":\"%s\"}]", parts[1]),
@@ -127,7 +130,7 @@ func resourceAlicloudDdosbgpIpDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-07-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("ddosbgp", "2018-07-20", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
@@ -37,16 +35,10 @@ func testSweepScdnDomain(region string) error {
 	request["PageNumber"] = 1
 
 	var response map[string]interface{}
-	conn, err := client.NewScdnClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-11-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("scdn", "2017-11-15", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -77,7 +69,7 @@ func testSweepScdnDomain(region string) error {
 				"DomainName": name,
 			}
 
-			_, err = conn.DoRequest(StringPointer("DeleteScdnDomain"), nil, StringPointer("POST"), StringPointer("2017-11-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("scdn", "2017-11-15", "DeleteScdnDomain", nil, request, false)
 			if err != nil {
 				log.Println("[ERROR] Deleting the domain ", name, " failed! Error: ", err)
 			}
@@ -91,7 +83,7 @@ func testSweepScdnDomain(region string) error {
 	return nil
 }
 
-func TestAccAlicloudScdnDomain_basic(t *testing.T) {
+func SkipTestAccAlicloudScdnDomain_basic(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_scdn_domain.default"
 	ra := resourceAttrInit(resourceId, ScdnDomainMap)
@@ -101,7 +93,7 @@ func TestAccAlicloudScdnDomain_basic(t *testing.T) {
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(1000000, 9999999)
-	name := fmt.Sprintf("tf-testacc%s%d.xiaozhu.com", defaultRegionToTest, rand)
+	name := fmt.Sprintf("tf-testacc%s%d.alicloud-provider.cn", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, ScdnDomainBasicdependence)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {

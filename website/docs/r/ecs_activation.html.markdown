@@ -19,11 +19,17 @@ For information about ECS Activation and how to use it, see [What is Activation]
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_ecs_activation&exampleId=20310eee-6f63-468b-f405-e97c0d076bc22dff9d7b&activeTab=example&spm=docs.r.ecs_activation.0.20310eee6f&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
 resource "alicloud_ecs_activation" "example" {
-  description           = var.name
+  description           = "terraform-example"
   instance_count        = 10
-  instance_name         = var.name
+  instance_name         = "terraform-example"
   ip_address_range      = "0.0.0.0/0"
   time_to_live_in_hours = 4
 }

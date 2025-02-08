@@ -38,13 +38,14 @@ const (
 	LogClientTimeout = "Client.Timeout exceeded while awaiting headers"
 
 	InvalidFileSystemStatus_Ordering = "InvalidFileSystemStatus.Ordering"
+	NotFoundArticle                  = "not found article by given param"
 )
 
 var SlbIsBusy = []string{"SystemBusy", "OperationBusy", "ServiceIsStopping", "BackendServer.configuring", "ServiceIsConfiguring"}
 var EcsNotFound = []string{"InvalidInstanceId.NotFound", "Forbidden.InstanceNotFound"}
 var DiskInvalidOperation = []string{"IncorrectDiskStatus", "IncorrectInstanceStatus", "OperationConflict", "InternalError", "InvalidOperation.Conflict", "IncorrectDiskStatus.Initializing"}
-var NetworkInterfaceInvalidOperations = []string{"InvalidOperation.InvalidEniState", "InvalidOperation.InvalidEcsState", "OperationConflict", "ServiceUnavailable", "InternalError"}
-var OperationDeniedDBStatus = []string{"InstanceConnectTimeoutFault", "OperationDenied.DBStatus", "OperationDenied.DBInstanceStatus", "OperationDenied.DBClusterStatus", "InternalError", "OperationDenied.OutofUsage", "IncorrectDBInstanceState"}
+var NetworkInterfaceInvalidOperations = []string{"InvalidOperation.InvalidEniState", "InvalidOperation.InvalidEcsState", "InvalidOperation.InvalidEniType", "InvalidOperation.HasMemberEniAttached", "OperationConflict", "ServiceUnavailable", "InternalError"}
+var OperationDeniedDBStatus = []string{"LockTimeout", "InstanceConnectTimeoutFault", "ConcurrentTaskExceeded", "OperationDenied.DBStatus", "Database.ConnectError", "OperationDenied.DBInstanceStatus", "OperationDenied.DBClusterStatus", "InternalError", "OperationDenied.OutofUsage", "IncorrectDBInstanceState"}
 var DBReadInstanceNotReadyStatus = []string{"OperationDenied.ReadDBInstanceStatus", "OperationDenied.MasterDBInstanceState", "ReadDBInstance.Mismatch"}
 var NasNotFound = []string{"InvalidMountTarget.NotFound", "InvalidFileSystem.NotFound", "Forbidden.NasNotFound", "InvalidLBid.NotFound", "VolumeUnavailable"}
 var SnapshotInvalidOperations = []string{"OperationConflict", "ServiceUnavailable", "InternalError", "SnapshotCreatedDisk", "SnapshotCreatedImage"}
@@ -159,7 +160,7 @@ func IsExpectedErrors(err error, expectCodes []string) bool {
 
 	if e, ok := err.(*common.Error); ok {
 		for _, code := range expectCodes {
-			if e.Code == code || strings.Contains(e.Message, code) {
+			if e.Code == code || fmt.Sprint(e.StatusCode) == code || strings.Contains(e.Message, code) {
 				return true
 			}
 		}
@@ -246,6 +247,43 @@ func NeedRetry(err error) bool {
 	return false
 }
 
+func NoCodeRegexRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	postRegex := regexp.MustCompile("^Post [\"]*https://.*")
+	if postRegex.MatchString(err.Error()) {
+		return true
+	}
+
+	throttlingRegex := regexp.MustCompile("Throttling")
+
+	if e, ok := err.(*tea.SDKError); ok {
+		if strings.Contains(*e.Message, "code: 500, 您已开通过") {
+			return false
+		}
+
+		if strings.Contains(*e.Message, "Client.Timeout") {
+			return true
+		}
+
+		if *e.Code == ServiceUnavailable || *e.Code == "Rejected.Throttling" || throttlingRegex.MatchString(*e.Code) {
+			return true
+		}
+	}
+
+	if e, ok := err.(*errors.ServerError); ok {
+		return e.ErrorCode() == ServiceUnavailable || e.ErrorCode() == "Rejected.Throttling" || throttlingRegex.MatchString(e.ErrorCode())
+	}
+
+	if e, ok := err.(*common.Error); ok {
+		return e.Code == ServiceUnavailable || e.Code == "Rejected.Throttling" || throttlingRegex.MatchString(e.Code)
+	}
+
+	return false
+}
+
 func IsExpectedErrorCodes(code string, errorCodes []string) bool {
 	if code == "" {
 		return false
@@ -273,13 +311,16 @@ func GetTimeoutMessage(product, status string) string {
 	return fmt.Sprintf("Waitting for %s %s is timeout.", product, status)
 }
 
+func GetCreateFailedMessage(product string) string {
+	return fmt.Sprintf("The specified %s is create failed.", product)
+}
+
 type ErrorSource string
 
 const (
 	AlibabaCloudSdkGoERROR = ErrorSource("[SDK alibaba-cloud-sdk-go ERROR]")
 	AliyunLogGoSdkERROR    = ErrorSource("[SDK aliyun-log-go-sdk ERROR]")
 	AliyunDatahubSdkGo     = ErrorSource("[SDK aliyun-datahub-sdk-go ERROR]")
-	AliyunMaxComputeSdkGo  = ErrorSource("[SDK aliyun-maxcompute-sdk-go ERROR]")
 	AliyunOssGoSdk         = ErrorSource("[SDK aliyun-oss-go-sdk ERROR]")
 	FcGoSdk                = ErrorSource("[SDK fc-go-sdk ERROR]")
 	DenverdinoAliyungo     = ErrorSource("[SDK denverdino/aliyungo ERROR]")
@@ -367,16 +408,20 @@ const ResponseCodeMsg = "Resource %s %s Failed!!! %v"
 const RequestIdMsg = "RequestId: %s"
 const NotFoundMsg = ResourceNotfound + "!!! %s"
 const NotFoundWithResponse = ResourceNotfound + "!!! Response: %v"
+const NotFoundWithError = ResourceNotfound + "!!! Error: %v"
 const DefaultTimeoutMsg = "Resource %s %s Timeout!!! %s"
 const DeleteTimeoutMsg = "Resource %s Still Exists. %s Timeout!!! %s"
 const WaitTimeoutMsg = "Resource %s %s Timeout In %d Seconds. Got: %s Expected: %s !!! %s"
 const DataDefaultErrorMsg = "Datasource %s %s Failed!!! %s"
 const SweepDefaultErrorMsg = "Sweep %s %s Failed!!!"
 const IdMsg = "Resource id：%s "
-const FailedGetAttributeMsg = "Getting resource %s attribute by path %s failed!!! Body: %v."
+const FailedGetAttributeMsg = "Getting resource %s attribute by path %s failed!!! Response: %v."
 
 const DefaultDebugMsg = "\n*************** %s Response *************** \n%s\n%s******************************\n\n"
-const FailedToReachTargetStatus = "Failed to reach target status. Current status is %s."
-const FailedToReachTargetStatusWithResponse = FailedToReachTargetStatus + " Response: %s"
+const FailedToReachTargetStatus = "Failed to reach target status. Last status: %s."
+const FailedToReachTargetStatusWithResponse = "Resource %s failed to reach target status. Last response: %s"
+const FailedToReachTargetStatusWithError = "Resource %s failed to reach target status. Last error: %s"
+
+const FailedToReachTargetStatusWithRequestId = FailedToReachTargetStatus + " Last RequestId: %s."
 const FailedToReachTargetAttribute = "Failed to reach value for target attribute. Current value is %s."
 const RequiredWhenMsg = "attribute '%s' is required when '%s' is %v"

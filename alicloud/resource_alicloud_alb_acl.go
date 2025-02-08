@@ -3,12 +3,10 @@ package alicloud
 import (
 	"fmt"
 	"log"
-	"regexp"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -55,9 +53,8 @@ func resourceAlicloudAlbAcl() *schema.Resource {
 				},
 			},
 			"acl_name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringMatch(regexp.MustCompile(`^[a-zA-Z][A-Za-z0-9._-]{2,128}$`), "The name must be `2` to `128` characters in length, and can contain letters, digits, hyphens (-) and underscores (_). It must start with a letter."),
+				Type:     schema.TypeString,
+				Optional: true,
 			},
 			"dry_run": {
 				Type:     schema.TypeBool,
@@ -83,10 +80,7 @@ func resourceAlicloudAlbAclCreate(d *schema.ResourceData, meta interface{}) erro
 	var response map[string]interface{}
 	action := "CreateAcl"
 	request := make(map[string]interface{})
-	conn, err := client.NewAlbClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("acl_name"); ok {
 		request["AclName"] = v
 	}
@@ -97,11 +91,9 @@ func resourceAlicloudAlbAclCreate(d *schema.ResourceData, meta interface{}) erro
 		request["ResourceGroupId"] = v
 	}
 	request["ClientToken"] = buildClientToken("CreateAcl")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, true)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"OperationFailed.ResourceGroupStatusCheckFail", "SystemBusy", "Throttling"}) || NeedRetry(err) {
 				wait()
@@ -164,6 +156,7 @@ func resourceAlicloudAlbAclUpdate(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*connectivity.AliyunClient)
 	albService := AlbService{client}
 	var response map[string]interface{}
+	var err error
 	d.Partial(true)
 
 	if d.HasChange("tags") {
@@ -185,13 +178,9 @@ func resourceAlicloudAlbAclUpdate(d *schema.ResourceData, meta interface{}) erro
 	request["ResourceType"] = "acl"
 	if update {
 		action := "MoveResourceGroup"
-		conn, err := client.NewAlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"NotExist.ResourceGroup"}) || NeedRetry(err) {
 					wait()
@@ -222,16 +211,10 @@ func resourceAlicloudAlbAclUpdate(d *schema.ResourceData, meta interface{}) erro
 			updateAclAttributeReq["DryRun"] = v
 		}
 		action := "UpdateAclAttribute"
-		conn, err := client.NewAlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		request["ClientToken"] = buildClientToken("UpdateAclAttribute")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, updateAclAttributeReq, &runtime)
+			response, err = client.RpcPost("Alb", "2020-06-16", action, nil, updateAclAttributeReq, true)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"OperationFailed.ResourceGroupStatusCheckFail", "SystemBusy", "Throttling"}) || NeedRetry(err) {
 					wait()
@@ -277,16 +260,10 @@ func resourceAlicloudAlbAclUpdate(d *schema.ResourceData, meta interface{}) erro
 					removeEntriesFromAclReq["DryRun"] = v
 				}
 				action := "RemoveEntriesFromAcl"
-				conn, err := client.NewAlbClient()
-				if err != nil {
-					return WrapError(err)
-				}
 				request["ClientToken"] = buildClientToken("RemoveEntriesFromAcl")
-				runtime := util.RuntimeOptions{}
-				runtime.SetAutoretry(true)
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, removeEntriesFromAclReq, &runtime)
+					response, err = client.RpcPost("Alb", "2020-06-16", action, nil, removeEntriesFromAclReq, true)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"IncorrectStatus.Acl", "OperationFailed.ResourceGroupStatusCheckFail", "SystemBusy", "Throttling"}) || NeedRetry(err) {
 							wait()
@@ -327,16 +304,10 @@ func resourceAlicloudAlbAclUpdate(d *schema.ResourceData, meta interface{}) erro
 					addEntriesToAclReq["DryRun"] = v
 				}
 				action := "AddEntriesToAcl"
-				conn, err := client.NewAlbClient()
-				if err != nil {
-					return WrapError(err)
-				}
 				request["ClientToken"] = buildClientToken("AddEntriesToAcl")
-				runtime := util.RuntimeOptions{}
-				runtime.SetAutoretry(true)
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, addEntriesToAclReq, &runtime)
+					response, err = client.RpcPost("Alb", "2020-06-16", action, nil, addEntriesToAclReq, true)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"OperationFailed.ResourceGroupStatusCheckFail", "SystemBusy", "Throttling"}) || NeedRetry(err) {
 							wait()
@@ -367,10 +338,7 @@ func resourceAlicloudAlbAclDelete(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteAcl"
 	var response map[string]interface{}
-	conn, err := client.NewAlbClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"AclId": d.Id(),
 	}
@@ -379,11 +347,9 @@ func resourceAlicloudAlbAclDelete(d *schema.ResourceData, meta interface{}) erro
 		request["DryRun"] = v
 	}
 	request["ClientToken"] = buildClientToken("DeleteAcl")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, true)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"OperationFailed.ResourceGroupStatusCheckFail", "SystemBusy", "ResourceInUse.Acl", "IncorrectStatus.Acl"}) || NeedRetry(err) {
 				wait()

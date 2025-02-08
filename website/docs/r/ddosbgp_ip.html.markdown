@@ -7,29 +7,49 @@ description: |-
   Provides a Alicloud Ddos Bgp Ip resource.
 ---
 
-# alicloud\_ddos\_bgp\_ip
+# alicloud_ddosbgp_ip
 
 Provides a Ddos Bgp Ip resource.
 
 For information about Ddos Bgp Ip and how to use it, see [What is Ip](https://www.alibabacloud.com/help/en/ddos-protection/latest/addip).
 
--> **NOTE:** Available in v1.180.0+.
+-> **NOTE:** Available since v1.180.0.
 
 ## Example Usage
 
 Basic Usage
 
-```terraform
-data "alicloud_resource_manager_resource_groups" "default" {}
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_ddosbgp_ip&exampleId=c68b456c-68bc-362a-1369-f2de392cfc0d379785d5&activeTab=example&spm=docs.r.ddosbgp_ip.0.c68b456c68&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
 
-resource "alicloud_eip_address" "default" {
-  address_name = "${var.name}"
+```terraform
+provider "alicloud" {
+  region = "cn-beijing"
 }
 
-data "alicloud_ddosbgp_instances" default {}
+variable "name" {
+  default = "tf-example"
+}
+data "alicloud_resource_manager_resource_groups" "default" {}
+resource "alicloud_ddosbgp_instance" "instance" {
+  name             = var.name
+  base_bandwidth   = 20
+  bandwidth        = -1
+  ip_count         = 100
+  ip_type          = "IPv4"
+  normal_bandwidth = 100
+  type             = "Enterprise"
+}
+
+resource "alicloud_eip_address" "default" {
+  address_name = var.name
+}
 
 resource "alicloud_ddosbgp_ip" "default" {
-  instance_id       = data.alicloud_ddosbgp_instances.default.ids.0
+  instance_id       = alicloud_ddosbgp_instance.instance.id
   ip                = alicloud_eip_address.default.ip_address
   resource_group_id = data.alicloud_resource_manager_resource_groups.default.groups.0.id
 }
@@ -42,6 +62,7 @@ The following arguments are supported:
 * `instance_id` - (Required, ForceNew) The ID of the native protection enterprise instance to be operated.
 * `ip` - (Required, ForceNew) The IP address.
 * `resource_group_id` - (Optional, ForceNew) The ID of the resource group.
+* `member_uid` - (Optional, ForceNew, Available since v1.225.1) The member account id of the IP address.
 
 ## Attributes Reference
 
@@ -50,7 +71,7 @@ The following attributes are exported:
 * `id` - The resource ID of Ip. The value formats as `<instance_id>:<ip>`.
 * `status` - The current state of the IP address. Valid Value: `normal`, `hole_begin`.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

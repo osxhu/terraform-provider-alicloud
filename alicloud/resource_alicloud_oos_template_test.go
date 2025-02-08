@@ -48,14 +48,8 @@ func testSweepOosTemplate(region string) error {
 	}
 	var response map[string]interface{}
 	action := "ListTemplates"
-	conn, err := client.NewOosClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-06-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("oos", "2019-06-01", action, nil, request, true)
 		if err != nil {
 			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_oos_template", action, AlibabaCloudSdkGoERROR)
 		}
@@ -82,7 +76,7 @@ func testSweepOosTemplate(region string) error {
 			request := map[string]interface{}{
 				"TemplateName": item["TemplateName"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-06-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("oos", "2019-06-01", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete OOS Template (%s): %s", item["TemplateName"].(string), err)
 			}
@@ -117,7 +111,6 @@ func TestAccAlicloudOOSTemplate_basic(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
 		CheckDestroy:  rac.checkResourceDestroy(),
@@ -143,10 +136,122 @@ func TestAccAlicloudOOSTemplate_basic(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConfig(map[string]interface{}{
+					"content": `{\"FormatVersion\":\"OOS-2019-06-01\",\"Description\":\"Update Describe instances of given status\",\"Parameters\":{\"Status\":{\"Type\":\"String\",\"Description\":\"(Required) The status of the Ecs instance.\"}},\"Tasks\":[{\"Properties\":{\"Parameters\":{\"Status\":\"{{ Status }}\"},\"API\":\"DescribeInstances\",\"Service\":\"Ecs\"},\"Name\":\"foo\",\"Action\":\"ACS::ExecuteApi\"}]}`,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"content": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"content":      `{\"FormatVersion\":\"OOS-2019-06-01\",\"Description\":\"Update Describe instances of given status\",\"Parameters\":{\"Status\":{\"Type\":\"String\",\"Description\":\"(Required) The status of the Ecs instance.\"}},\"Tasks\":[{\"Properties\":{\"Parameters\":{\"Status\":\"{{ Status }}\"},\"API\":\"DescribeInstances\",\"Service\":\"Ecs\"},\"Name\":\"foo\",\"Action\":\"ACS::ExecuteApi\"}]}`,
+					"version_name": "test2",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"content":      CHECKSET,
+						"version_name": "test2",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"content": `FormatVersion: OOS-2019-06-01\nDescription: Update Describe instances of given status\nParameters:\n  Status:\n    Type: String\n    Description: (Required) The status of the Ecs instance.\nTasks:\n  - Properties:\n      Parameters:\n        Status: '{{ Status }}'\n      API: DescribeInstances\n      Service: Ecs\n    Name: foo\n    Action: 'ACS::ExecuteApi'`,
+					"tags": map[string]string{
+						"Created": "TF-Test",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"content":      CHECKSET,
+						"tags.%":       "2",
+						"tags.Created": "TF-Test",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"content": `FormatVersion: OOS-2019-06-01\nDescription: Describe instances of given status\nParameters:\n  Status:\n    Type: String\n    Description: (Required) The status of the Ecs instance.\nTasks:\n  - Properties:\n      Parameters:\n        Status: '{{ Status }}'\n      API: DescribeInstances\n      Service: Ecs\n    Name: foo\n    Action: 'ACS::ExecuteApi'`,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "acceptance Test",
+					},
+					"version_name": "test3",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"content":      CHECKSET,
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "acceptance Test",
+						"version_name": "test3",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.ids.0}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"auto_delete_executions", "content", "version_name"},
+			},
+		},
+	})
+}
+
+func TestAccAlicloudOOSTemplate_yamlContent(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_oos_template.default"
+	ra := resourceAttrInit(resourceId, OosTemplateMap)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &OosService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeOosTemplate")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAccOosTemplate%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, OosTemplateBasicdependence)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"content":       `FormatVersion: OOS-2019-06-01\nDescription: Update Describe instances of given status\nParameters:\n  Status:\n    Type: String\n    Description: (Required) The status of the Ecs instance.\nTasks:\n  - Properties:\n      Parameters:\n        Status: '{{ Status }}'\n      API: DescribeInstances\n      Service: Ecs\n    Name: foo\n    Action: 'ACS::ExecuteApi'`,
+					"template_name": name,
+					"version_name":  "test1",
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "acceptance Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"content":      CHECKSET,
+						"version_name": "test1",
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "acceptance Test",
+					}),
+				),
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -215,6 +320,12 @@ func TestAccAlicloudOOSTemplate_basic(t *testing.T) {
 						"resource_group_id": CHECKSET,
 					}),
 				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"auto_delete_executions", "content", "version_name"},
 			},
 		},
 	})

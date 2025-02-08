@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 type AmqpOpenService struct {
@@ -16,10 +16,7 @@ type AmqpOpenService struct {
 
 func (s *AmqpOpenService) DescribeAmqpVirtualHost(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewOnsproxyClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListVirtualHosts"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -32,11 +29,9 @@ func (s *AmqpOpenService) DescribeAmqpVirtualHost(id string) (object map[string]
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-12-12"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("amqp-open", "2019-12-12", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -78,10 +73,7 @@ func (s *AmqpOpenService) DescribeAmqpVirtualHost(id string) (object map[string]
 
 func (s *AmqpOpenService) DescribeAmqpQueue(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewOnsproxyClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListQueues"
 	parts, err := ParseResourceId(id, 3)
 	if err != nil {
@@ -95,11 +87,9 @@ func (s *AmqpOpenService) DescribeAmqpQueue(id string) (object map[string]interf
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-12-12"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("amqp-open", "2019-12-12", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -141,10 +131,7 @@ func (s *AmqpOpenService) DescribeAmqpQueue(id string) (object map[string]interf
 
 func (s *AmqpOpenService) DescribeAmqpExchange(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewOnsproxyClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListExchanges"
 	parts, err := ParseResourceId(id, 3)
 	if err != nil {
@@ -158,11 +145,9 @@ func (s *AmqpOpenService) DescribeAmqpExchange(id string) (object map[string]int
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-12-12"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("amqp-open", "2019-12-12", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -204,21 +189,16 @@ func (s *AmqpOpenService) DescribeAmqpExchange(id string) (object map[string]int
 
 func (s *AmqpOpenService) DescribeAmqpInstance(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewOnsproxyClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListInstances"
 	request := map[string]interface{}{
 		"MaxResults": 100,
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-12-12"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("amqp-open", "2019-12-12", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -277,31 +257,28 @@ func (s *AmqpOpenService) AmqpInstanceStateRefreshFunc(id string, failStates []s
 		return object, fmt.Sprint(object["Status"]), nil
 	}
 }
-
 func (s *AmqpOpenService) DescribeAmqpBinding(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewOnsproxyClient()
+	action := "ListBindings"
+
+	client := s.client
+
+	parts, err := ParseResourceId(id, 4)
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	action := "ListBindings"
-	parts, err := ParseResourceId(id, 4)
-	if err != nil {
-		err = WrapError(err)
-		return
-	}
+
 	request := map[string]interface{}{
 		"InstanceId":  parts[0],
 		"VirtualHost": parts[1],
-		"MaxResults":  100,
+		"MaxResults":  PageSizeLarge,
 	}
+
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-12-12"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("amqp-open", "2019-12-12", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -312,18 +289,25 @@ func (s *AmqpOpenService) DescribeAmqpBinding(id string) (object map[string]inte
 			return nil
 		})
 		addDebug(action, response, request)
+
 		if err != nil {
+			if IsExpectedErrors(err, []string{"ExchangeNotExist"}) {
+				return nil, WrapErrorf(err, NotFoundMsg, AlibabaCloudSdkGoERROR)
+			}
 			return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		}
-		v, err := jsonpath.Get("$.Data.Bindings", response)
+
+		resp, err := jsonpath.Get("$.Data.Bindings", response)
 		if err != nil {
 			return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Data.Bindings", response)
 		}
-		if len(v.([]interface{})) < 1 {
-			return object, WrapErrorf(Error(GetNotFoundMessage("Amqp", id)), NotFoundWithResponse, response)
+
+		if v, ok := resp.([]interface{}); !ok || len(v) < 1 {
+			return object, WrapErrorf(Error(GetNotFoundMessage("Amqp:Binding", id)), NotFoundWithResponse, response)
 		}
-		for _, v := range v.([]interface{}) {
-			if fmt.Sprint(v.(map[string]interface{})["SourceExchange"]) == parts[2] {
+
+		for _, v := range resp.([]interface{}) {
+			if fmt.Sprint(v.(map[string]interface{})["SourceExchange"]) == parts[2] && fmt.Sprint(v.(map[string]interface{})["DestinationName"]) == parts[3] {
 				idExist = true
 				return v.(map[string]interface{}), nil
 			}
@@ -335,8 +319,79 @@ func (s *AmqpOpenService) DescribeAmqpBinding(id string) (object map[string]inte
 			break
 		}
 	}
+
 	if !idExist {
-		return object, WrapErrorf(Error(GetNotFoundMessage("Amqp", id)), NotFoundWithResponse, response)
+		return object, WrapErrorf(Error(GetNotFoundMessage("Amqp:Binding", id)), NotFoundWithResponse, response)
 	}
+
 	return
+}
+
+func (s *AmqpOpenService) DescribeAmqpStaticAccount(id string) (object map[string]interface{}, err error) {
+	client := s.client
+	parts, err := ParseResourceId(id, 2)
+	if err != nil {
+		return object, WrapError(err)
+	}
+
+	request := map[string]interface{}{}
+	request["InstanceId"] = parts[0]
+
+	var response map[string]interface{}
+	action := "ListAccounts"
+	wait := incrementalWait(3*time.Second, 3*time.Second)
+	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
+		resp, err := client.RpcPost("amqp-open", "2019-12-12", action, nil, request, true)
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		response = resp
+		addDebug(action, response, request)
+		return nil
+	})
+	if err != nil {
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+	v, err := jsonpath.Get("$.Data", response)
+	if err != nil {
+		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Data", response)
+	}
+	data := v.(map[string]interface{})
+	val, ok := data[parts[0]]
+	if ok {
+		allData := val.([]interface{})
+		for _, i := range allData {
+			detail := i.(map[string]interface{})
+			if parts[1] == detail["accessKey"] {
+				return detail, nil
+			}
+		}
+		err = WrapErrorf(Error(GetNotFoundMessage("Amqp", id)), NotFoundMsg, ProviderERROR)
+		return object, err
+	} else {
+		err = WrapErrorf(Error(GetNotFoundMessage("Amqp", id)), NotFoundMsg, ProviderERROR)
+		return object, err
+	}
+}
+
+func (s *AmqpOpenService) AmqpStaticAccountStateRefreshFunc(d *schema.ResourceData, failStates []string) resource.StateRefreshFunc {
+	return func() (interface{}, string, error) {
+		object, err := s.DescribeAmqpStaticAccount(d.Id())
+		if err != nil {
+			if NotFoundError(err) {
+				return nil, "", nil
+			}
+			return nil, "", WrapError(err)
+		}
+		for _, failState := range failStates {
+			if fmt.Sprint(object[""]) == failState {
+				return object, fmt.Sprint(object[""]), WrapError(Error(FailedToReachTargetStatus, fmt.Sprint(object[""])))
+			}
+		}
+		return object, fmt.Sprint(object[""]), nil
+	}
 }

@@ -5,11 +5,9 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAlicloudOosTemplate() *schema.Resource {
@@ -28,13 +26,8 @@ func resourceAlicloudOosTemplate() *schema.Resource {
 				Default:  false,
 			},
 			"content": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.ValidateJsonString,
-				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-					equal, _ := compareJsonTemplateAreEquivalent(old, new)
-					return equal
-				},
+				Type:     schema.TypeString,
+				Required: true,
 			},
 			"created_by": {
 				Type:     schema.TypeString,
@@ -104,10 +97,7 @@ func resourceAlicloudOosTemplateCreate(d *schema.ResourceData, meta interface{})
 	var response map[string]interface{}
 	action := "CreateTemplate"
 	request := make(map[string]interface{})
-	conn, err := client.NewOosClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["Content"] = d.Get("content")
 	request["RegionId"] = client.RegionId
 	if v, ok := d.GetOk("tags"); ok {
@@ -127,7 +117,7 @@ func resourceAlicloudOosTemplateCreate(d *schema.ResourceData, meta interface{})
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-06-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("oos", "2019-06-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -146,6 +136,7 @@ func resourceAlicloudOosTemplateCreate(d *schema.ResourceData, meta interface{})
 
 	return resourceAlicloudOosTemplateRead(d, meta)
 }
+
 func resourceAlicloudOosTemplateRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	oosService := OosService{client}
@@ -177,12 +168,10 @@ func resourceAlicloudOosTemplateRead(d *schema.ResourceData, meta interface{}) e
 	d.Set("resource_group_id", object["ResourceGroupId"])
 	return nil
 }
+
 func resourceAlicloudOosTemplateUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	conn, err := client.NewOosClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	update := false
 	request := map[string]interface{}{
@@ -213,7 +202,7 @@ func resourceAlicloudOosTemplateUpdate(d *schema.ResourceData, meta interface{})
 		action := "UpdateTemplate"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-06-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("oos", "2019-06-01", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -230,14 +219,12 @@ func resourceAlicloudOosTemplateUpdate(d *schema.ResourceData, meta interface{})
 	}
 	return resourceAlicloudOosTemplateRead(d, meta)
 }
+
 func resourceAlicloudOosTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteTemplate"
 	var response map[string]interface{}
-	conn, err := client.NewOosClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"TemplateName": d.Id(),
 	}
@@ -248,7 +235,7 @@ func resourceAlicloudOosTemplateDelete(d *schema.ResourceData, meta interface{})
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-06-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("oos", "2019-06-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

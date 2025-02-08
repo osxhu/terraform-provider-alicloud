@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -17,18 +16,13 @@ type NasService struct {
 
 func (s *NasService) DescribeNasFileSystem(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeFileSystems"
 	request := map[string]interface{}{
 		"RegionId":     s.client.RegionId,
 		"FileSystemId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"InvalidFileSystem.NotFound", "Forbidden.NasNotFound", "Resource.NotFound", "InvalidFileSystemStatus.Ordering"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("NasFileSystem", id)), NotFoundWithResponse, ProviderERROR)
@@ -51,10 +45,7 @@ func (s *NasService) DescribeNasFileSystem(id string) (object map[string]interfa
 
 func (s *NasService) DescribeNasMountTarget(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeMountTargets"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -66,9 +57,7 @@ func (s *NasService) DescribeNasMountTarget(id string) (object map[string]interf
 		"FileSystemId":      parts[0],
 		"MountTargetDomain": parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"Forbidden.NasNotFound", "InvalidFileSystem.NotFound", "InvalidLBid.NotFound", "InvalidMountTarget.NotFound", "VolumeUnavailable", "InvalidParam.MountTargetDomain"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("NasMountTarget", id)), NotFoundMsg, ProviderERROR)
@@ -95,10 +84,7 @@ func (s *NasService) DescribeNasMountTarget(id string) (object map[string]interf
 
 func (s *NasService) DescribeNasAccessGroup(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAccessGroups"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -110,9 +96,7 @@ func (s *NasService) DescribeNasAccessGroup(id string) (object map[string]interf
 		"AccessGroupName": parts[0],
 		"FileSystemType":  parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"Forbidden.NasNotFound", "InvalidAccessGroup.NotFound", "Resource.NotFound"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("NasAccessGroup", id)), NotFoundMsg, ProviderERROR)
@@ -135,10 +119,7 @@ func (s *NasService) DescribeNasAccessGroup(id string) (object map[string]interf
 
 func (s *NasService) DescribeNasAccessRule(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAccessRules"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -150,9 +131,7 @@ func (s *NasService) DescribeNasAccessRule(id string) (object map[string]interfa
 		"AccessGroupName": parts[0],
 		"AccessRuleId":    parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"InvalidAccessGroup.NotFound", "Forbidden.NasNotFound"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("AccessRule", id)), NotFoundMsg, ProviderERROR)
@@ -161,7 +140,25 @@ func (s *NasService) DescribeNasAccessRule(id string) (object map[string]interfa
 		err = WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		return object, err
 	}
+	wait := incrementalWait(3*time.Second, 3*time.Second)
+	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
+		response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		return nil
+	})
 	addDebug(action, response, request)
+	if err != nil {
+		if IsExpectedErrors(err, []string{"InvalidAccessGroup.NotFound", "Forbidden.NasNotFound"}) {
+			return object, WrapErrorf(Error(GetNotFoundMessage("AccessRule", id)), NotFoundMsg, ProviderERROR, fmt.Sprint(response["RequestId"]))
+		}
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
 	v, err := jsonpath.Get("$.AccessRules.AccessRule", response)
 	if err != nil {
 		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.AccessRules.AccessRule", response)
@@ -214,20 +211,15 @@ func (s *NasService) DescribeNasFileSystemStateRefreshFunc(id string, defaultRet
 
 func (s *NasService) DescribeNasSnapshot(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeSnapshots"
 	request := map[string]interface{}{
 		"SnapshotIds":    id,
 		"FileSystemType": "extreme",
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -280,10 +272,7 @@ func (s *NasService) NasSnapshotStateRefreshFunc(id string, failStates []string)
 }
 func (s *NasService) DescribeNasFileset(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeFilesets"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -296,11 +285,9 @@ func (s *NasService) DescribeNasFileset(id string) (object map[string]interface{
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -364,10 +351,7 @@ func (s *NasService) NasFilesetStateRefreshFunc(id string, failStates []string) 
 }
 
 func (s *NasService) ListTagResources(id string, resourceType string) (object interface{}, err error) {
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListTagResources"
 	request := map[string]interface{}{
 		"RegionId":     s.client.RegionId,
@@ -380,7 +364,7 @@ func (s *NasService) ListTagResources(id string, resourceType string) (object in
 	for {
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err := client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -415,10 +399,7 @@ func (s *NasService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 	if d.HasChange("tags") {
 		added, removed := parsingTags(d)
-		conn, err := s.client.NewNasClient()
-		if err != nil {
-			return WrapError(err)
-		}
+		client := s.client
 
 		removedTagKeys := make([]string, 0)
 		for _, v := range removed {
@@ -438,7 +419,7 @@ func (s *NasService) SetResourceTags(d *schema.ResourceData, resourceType string
 			}
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -470,7 +451,7 @@ func (s *NasService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -493,20 +474,15 @@ func (s *NasService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 func (s *NasService) DescribeNasAutoSnapshotPolicy(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAutoSnapshotPolicies"
 	request := map[string]interface{}{
 		"AutoSnapshotPolicyId": id,
 		"FileSystemType":       "extreme",
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -560,10 +536,7 @@ func (s *NasService) NasAutoSnapshotPolicyStateRefreshFunc(id string, failStates
 
 func (s *NasService) DescribeNasLifecyclePolicy(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeLifecyclePolicies"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -577,11 +550,9 @@ func (s *NasService) DescribeNasLifecyclePolicy(id string) (object map[string]in
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2017-06-26"), StringPointer("AK"), request, nil, &runtime)
+			response, err = client.RpcGet("NAS", "2017-06-26", action, request, nil)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -624,10 +595,7 @@ func (s *NasService) DescribeNasLifecyclePolicy(id string) (object map[string]in
 
 func (s *NasService) DescribeNasDataFlow(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeDataFlows"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -640,11 +608,9 @@ func (s *NasService) DescribeNasDataFlow(id string) (object map[string]interface
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -708,19 +674,14 @@ func (s *NasService) NasDataFlowStateRefreshFunc(id string, failStates []string)
 }
 func (s *NasService) DescribeNasRecycleBin(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetRecycleBinAttribute"
 	request := map[string]interface{}{
 		"FileSystemId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2017-06-26"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("NAS", "2017-06-26", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -751,20 +712,15 @@ func (s *NasService) DescribeNasRecycleBin(id string) (object map[string]interfa
 
 func (s *NasService) DescribeNasSmbAcl(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewNasClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeSmbAcl"
 
 	request := map[string]interface{}{
 		"FileSystemId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcPost("NAS", "2017-06-26", action, request, nil, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

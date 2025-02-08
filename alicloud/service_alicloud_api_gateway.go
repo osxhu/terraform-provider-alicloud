@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
@@ -212,6 +211,62 @@ func (s *CloudApiService) DescribeApiGatewayAppAttachment(id string) (*cloudapi.
 	}
 	app = &filteredAppsTemp[0]
 	return app, nil
+}
+
+func (s *CloudApiService) DescribeApiGatewayPluginAttachment(id string) (*cloudapi.PluginAttribute, error) {
+	plugin := &cloudapi.PluginAttribute{}
+	request := cloudapi.CreateDescribePluginsByApiRequest()
+	request.RegionId = s.client.RegionId
+	parts, err := ParseResourceId(id, 4)
+	if err != nil {
+		return plugin, WrapError(err)
+	}
+	request.GroupId = parts[0]
+	request.ApiId = parts[1]
+	request.StageName = parts[3]
+	pluginId := parts[2]
+
+	var allPlugins []cloudapi.PluginAttribute
+
+	for {
+		raw, err := s.client.WithCloudApiClient(func(cloudApiClient *cloudapi.Client) (interface{}, error) {
+			return cloudApiClient.DescribePluginsByApi(request)
+		})
+		if err != nil {
+			if IsExpectedErrors(err, []string{"NotFoundApiGroup", "NotFoundApi"}) {
+				return plugin, WrapErrorf(err, NotFoundMsg, AlibabaCloudSdkGoERROR)
+			}
+			return plugin, WrapErrorf(err, DefaultErrorMsg, id, request.GetActionName(), AlibabaCloudSdkGoERROR)
+		}
+		addDebug(request.GetActionName(), raw, request.RpcRequest, request)
+		response, _ := raw.(*cloudapi.DescribePluginsByApiResponse)
+
+		allPlugins = append(allPlugins, response.Plugins.PluginAttribute...)
+
+		if len(allPlugins) < PageSizeLarge {
+			break
+		}
+
+		page, err := getNextpageNumber(request.PageNumber)
+		if err != nil {
+			return plugin, WrapError(err)
+		}
+		request.PageNumber = page
+	}
+
+	var filteredPluginsTemp []cloudapi.PluginAttribute
+	for _, plugin := range allPlugins {
+		if plugin.PluginId == pluginId {
+			filteredPluginsTemp = append(filteredPluginsTemp, plugin)
+		}
+	}
+
+	if len(filteredPluginsTemp) < 1 {
+		return plugin, WrapErrorf(Error(GetNotFoundMessage("ApiGatewayPluginAttachment", id)), NotFoundMsg, ProviderERROR)
+	}
+
+	plugin = &filteredPluginsTemp[0]
+	return plugin, nil
 }
 
 func (s *CloudApiService) DescribeApiGatewayVpcAccess(id string) (*cloudapi.VpcAccessAttribute, error) {
@@ -491,10 +546,7 @@ func (s *CloudApiService) tagsFromMap(m map[string]interface{}) []cloudapi.TagRe
 }
 
 func (s *CloudApiService) DescribeApiGatewayBackend(id string) (object map[string]interface{}, err error) {
-	conn, err := s.client.NewApigatewayClient()
-	if err != nil {
-		return object, WrapError(err)
-	}
+	client := s.client
 
 	request := map[string]interface{}{
 		"BackendId": id,
@@ -502,11 +554,9 @@ func (s *CloudApiService) DescribeApiGatewayBackend(id string) (object map[strin
 
 	var response map[string]interface{}
 	action := "DescribeBackendInfo"
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		resp, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-07-14"), StringPointer("AK"), nil, request, &runtime)
+		resp, err := client.RpcPost("CloudAPI", "2016-07-14", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -533,19 +583,14 @@ func (s *CloudApiService) DescribeApiGatewayBackend(id string) (object map[strin
 
 func (s *CloudApiService) DescribeApiGatewayLogConfig(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewApigatewayClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeLogConfig"
 	request := map[string]interface{}{
 		"LogType": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-07-14"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("CloudAPI", "2016-07-14", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -578,10 +623,7 @@ func (s *CloudApiService) DescribeApiGatewayModel(id string) (object map[string]
 	var response map[string]interface{}
 	action := "DescribeModels"
 
-	conn, err := s.client.NewApigatewayClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -592,11 +634,9 @@ func (s *CloudApiService) DescribeApiGatewayModel(id string) (object map[string]
 		"ModelName": parts[1],
 	}
 
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-07-14"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("CloudAPI", "2016-07-14", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

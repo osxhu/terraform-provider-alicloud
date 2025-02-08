@@ -1,5 +1,5 @@
 ---
-subcategory: "Elastic Desktop Service(EDS)"
+subcategory: "Elastic Desktop Service (ECD)"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_ecd_ram_directory"
 sidebar_current: "docs-alicloud-resource-ecd-ram-directory"
@@ -7,33 +7,46 @@ description: |-
   Provides a Alicloud ECD Ram Directory resource.
 ---
 
-# alicloud\_ecd\_ram\_directory
+# alicloud_ecd_ram_directory
 
 Provides a ECD Ram Directory resource.
 
-For information about ECD Ram Directory and how to use it, see [What is Ram Directory](https://help.aliyun.com/document_detail/436216.html).
+For information about ECD Ram Directory and how to use it, see [What is Ram Directory](https://www.alibabacloud.com/help/en/wuying-workspace/developer-reference/api-ecd-2020-09-30-createramdirectory).
 
--> **NOTE:** Available in v1.174.0+.
+-> **NOTE:** Available since v1.174.0.
+
+-> **DEPRECATED:** This resource has been deprecated from version `1.239.0`.
 
 ## Example Usage
 
 Basic Usage
 
 ```terraform
+provider "alicloud" {
+  region = "cn-hangzhou"
+}
+
+variable "name" {
+  default = "terraform-example"
+}
 data "alicloud_ecd_zones" "default" {}
-data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+resource "alicloud_vpc" "default" {
+  vpc_name   = var.name
+  cidr_block = "172.16.0.0/16"
 }
-data "alicloud_vswitches" "default" {
-  vpc_id  = data.alicloud_vpcs.default.ids.0
-  zone_id = data.alicloud_ecd_zones.default.ids.0
+
+resource "alicloud_vswitch" "default" {
+  vpc_id       = alicloud_vpc.default.id
+  cidr_block   = "172.16.0.0/24"
+  zone_id      = data.alicloud_ecd_zones.default.ids.0
+  vswitch_name = var.name
 }
+
 resource "alicloud_ecd_ram_directory" "default" {
-  desktop_access_type    = "INTERNET"
-  enable_admin_access    = "true"
-  enable_internet_access = "true"
-  ram_directory_name     = var.name
-  vswitch_ids            = [data.alicloud_vswitches.default.ids.0]
+  desktop_access_type = "INTERNET"
+  enable_admin_access = true
+  ram_directory_name  = var.name
+  vswitch_ids         = [alicloud_vswitch.default.id]
 }
 ```
 ## Argument Reference
@@ -53,7 +66,7 @@ The following attributes are exported:
 * `id` - The resource ID in terraform of Ram Directory.
 * `status` - The status of directory.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

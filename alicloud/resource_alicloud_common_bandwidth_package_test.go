@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
@@ -44,15 +42,9 @@ func testSweepCommonBandwidthPackage(region string) error {
 	request["PageSize"] = PageSizeLarge
 	request["PageNumber"] = 1
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	packageIds := make([]string, 0)
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 		if err != nil {
 			return fmt.Errorf("Error retrieving CommonBandwidthPackages: %s", err)
 		}
@@ -94,7 +86,7 @@ func testSweepCommonBandwidthPackage(region string) error {
 		request["RegionId"] = client.RegionId
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(10*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -112,13 +104,13 @@ func testSweepCommonBandwidthPackage(region string) error {
 	return nil
 }
 
-func TestAccAlicloudCommonBandwidthPackage_basic(t *testing.T) {
+func TestAccAliCloudCommonBandwidthPackage_basic(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_common_bandwidth_package.default"
 	ra := resourceAttrInit(resourceId, AlicloudCommonBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCommonBandwidthPackage")
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -127,6 +119,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -186,7 +179,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.change.ids.0}",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.ids.0}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -209,7 +202,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic(t *testing.T) {
 					"bandwidth":              `10`,
 					"description":            name,
 					"bandwidth_package_name": "${var.name}",
-					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.ids.0}",
+					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.ids.1}",
 					"deletion_protection":    "false",
 				}),
 				Check: resource.ComposeTestCheckFunc(
@@ -226,13 +219,13 @@ func TestAccAlicloudCommonBandwidthPackage_basic(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
+func TestAccAliCloudCommonBandwidthPackage_basic1(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_common_bandwidth_package.default"
 	ra := resourceAttrInit(resourceId, AlicloudCommonBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCommonBandwidthPackage")
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -241,6 +234,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -254,8 +248,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
 					"ratio":                `100`,
 					"name":                 name,
 					"description":          name,
-					"zone":                 "${data.alicloud_zones.default.zones.0.id}",
-					"resource_group_id":    "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					//"zone":                 "${data.alicloud_zones.default.zones.0.id}",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -265,8 +259,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
 						"description":          name,
 						"ratio":                "100",
 						"name":                 name,
-						"zone":                 CHECKSET,
-						"resource_group_id":    CHECKSET,
+						//"zone":                 CHECKSET,
+						"resource_group_id": CHECKSET,
 					}),
 				),
 			},
@@ -281,6 +275,48 @@ func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
@@ -290,13 +326,13 @@ func TestAccAlicloudCommonBandwidthPackage_basic1(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudCommonBandwidthPackage_basic2(t *testing.T) {
+func TestAccAliCloudCommonBandwidthPackage_basic2(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_common_bandwidth_package.default"
 	ra := resourceAttrInit(resourceId, AlicloudCommonBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCommonBandwidthPackage")
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -305,6 +341,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic2(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -318,20 +355,20 @@ func TestAccAlicloudCommonBandwidthPackage_basic2(t *testing.T) {
 					"ratio":                  `100`,
 					"bandwidth_package_name": name,
 					"description":            name,
-					"zone":                   "${data.alicloud_zones.default.zones.0.id}",
-					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					// "zone":                   "${data.alicloud_zones.default.zones.0.id}",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"force":             "true",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"bandwidth":            "10",
-						"isp":                  "BGP",
-						"internet_charge_type": "PayByBandwidth",
-
+						"bandwidth":              "10",
+						"isp":                    "BGP",
+						"internet_charge_type":   "PayByBandwidth",
 						"ratio":                  "100",
 						"bandwidth_package_name": name,
 						"description":            name,
-						"zone":                   CHECKSET,
-						"resource_group_id":      CHECKSET,
+						// "zone":                   CHECKSET,
+						"resource_group_id": CHECKSET,
 					}),
 				),
 			},
@@ -345,13 +382,13 @@ func TestAccAlicloudCommonBandwidthPackage_basic2(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudCommonBandwidthPackage_basic3(t *testing.T) {
+func TestAccAliCloudCommonBandwidthPackage_basic3(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_common_bandwidth_package.default"
 	ra := resourceAttrInit(resourceId, AlicloudCommonBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCommonBandwidthPackage")
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -360,6 +397,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic3(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -373,8 +411,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic3(t *testing.T) {
 					"ratio":                  `100`,
 					"bandwidth_package_name": name,
 					"description":            name,
-					"zone":                   "${data.alicloud_zones.default.zones.0.id}",
-					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					// "zone":                   "${data.alicloud_zones.default.zones.0.id}",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -384,8 +422,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic3(t *testing.T) {
 						"ratio":                  "100",
 						"bandwidth_package_name": name,
 						"description":            name,
-						"zone":                   CHECKSET,
-						"resource_group_id":      CHECKSET,
+						// "zone":                   CHECKSET,
+						"resource_group_id": CHECKSET,
 					}),
 				),
 			},
@@ -399,13 +437,13 @@ func TestAccAlicloudCommonBandwidthPackage_basic3(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudCommonBandwidthPackage_basic4(t *testing.T) {
+func TestAccAliCloudCommonBandwidthPackage_basic4(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_common_bandwidth_package.default"
 	ra := resourceAttrInit(resourceId, AlicloudCommonBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCommonBandwidthPackage")
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -414,6 +452,7 @@ func TestAccAlicloudCommonBandwidthPackage_basic4(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -428,8 +467,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic4(t *testing.T) {
 					"bandwidth_package_name":    name,
 					"description":               name,
 					"security_protection_types": []string{"AntiDDoS_Enhanced"},
-					"zone":                      "${data.alicloud_zones.default.zones.0.id}",
-					"resource_group_id":         "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					// "zone":                      "${data.alicloud_zones.default.zones.0.id}",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -440,8 +479,8 @@ func TestAccAlicloudCommonBandwidthPackage_basic4(t *testing.T) {
 						"bandwidth_package_name":      name,
 						"description":                 name,
 						"security_protection_types.#": "1",
-						"zone":                        CHECKSET,
-						"resource_group_id":           CHECKSET,
+						// "zone":                        CHECKSET,
+						"resource_group_id": CHECKSET,
 					}),
 				),
 			},
@@ -468,10 +507,6 @@ variable "name" {
 			default = "%s"
 		}
 data "alicloud_resource_manager_resource_groups" "default" {
-  name_regex = "default"
-}
-data "alicloud_resource_manager_resource_groups" "change" {
-  name_regex = "terraformci"
 }
 `, name)
 }
@@ -490,3 +525,285 @@ data "alicloud_resource_manager_resource_groups" "change" {
 data "alicloud_zones" "default" {}
 `, name)
 }
+
+// Test Cbwp CommonBandwidthPackage. >>> Resource test cases, automatically generated.
+// Case 3426
+func TestAccAliCloudCbwpCommonBandwidthPackage_basic3426(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_common_bandwidth_package.default"
+	ra := resourceAttrInit(resourceId, AlicloudCbwpCommonBandwidthPackageMap3426)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%scbwpcp%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudCbwpCommonBandwidthPackageBasicDependence3426)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccPreCheckWithTime(t, []int{1, 2, 3, 4, 5, 6, 7})
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth": "1000",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth": "1000",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": "test",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": "test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.default.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_package_name": "tf-testacc",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_package_name": "tf-testacc",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": "testupdate",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": "testupdate",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth": "1001",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth": "1001",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.change.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_package_name": "tf-testacc-update",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_package_name": "tf-testacc-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description":          "test",
+					"isp":                  "BGP",
+					"bandwidth":            "1000",
+					"ratio":                "100",
+					"internet_charge_type": "PayByBandwidth",
+					"resource_group_id":    "${alicloud_resource_manager_resource_group.default.id}",
+					"zone":                 "${data.alicloud_zones.default.zones.0.id}",
+					"security_protection_types": []string{
+						"AntiDDoS_Enhanced"},
+					"bandwidth_package_name": "tf-testacc",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description":                 "test",
+						"isp":                         "BGP",
+						"bandwidth":                   "1000",
+						"ratio":                       "100",
+						"internet_charge_type":        "PayByBandwidth",
+						"resource_group_id":           CHECKSET,
+						"zone":                        CHECKSET,
+						"security_protection_types.#": "1",
+						"bandwidth_package_name":      "tf-testacc",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"zone"},
+			},
+		},
+	})
+}
+
+var AlicloudCbwpCommonBandwidthPackageMap3426 = map[string]string{
+	"payment_type":         CHECKSET,
+	"ratio":                "100",
+	"status":               CHECKSET,
+	"isp":                  "BGP",
+	"create_time":          CHECKSET,
+	"deletion_protection":  CHECKSET,
+	"internet_charge_type": "PayByTraffic",
+}
+
+func AlicloudCbwpCommonBandwidthPackageBasicDependence3426(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+data "alicloud_zones" "default" {}
+
+resource "alicloud_resource_manager_resource_group" "default" {
+  display_name        = "test03"
+  resource_group_name = var.name
+}
+
+resource "alicloud_resource_manager_resource_group" "change" {
+  display_name        = "test04"
+  resource_group_name = "${var.name}1"
+}
+
+
+`, name)
+}
+
+// Case 3426  twin
+func TestAccAliCloudCbwpCommonBandwidthPackage_basic3426_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_common_bandwidth_package.default"
+	ra := resourceAttrInit(resourceId, AlicloudCbwpCommonBandwidthPackageMap3426)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CbwpServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCbwpCommonBandwidthPackage")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%scbwpcp%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudCbwpCommonBandwidthPackageBasicDependence3426)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccPreCheckWithTime(t, []int{1, 2, 3, 4, 5, 6, 7})
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description":          "testupdate",
+					"isp":                  "BGP",
+					"bandwidth":            "1001",
+					"ratio":                "100",
+					"internet_charge_type": "PayByBandwidth",
+					"resource_group_id":    "${alicloud_resource_manager_resource_group.change.id}",
+					"zone":                 "${data.alicloud_zones.default.zones.0.id}",
+					"security_protection_types": []string{
+						"AntiDDoS_Enhanced"},
+					"bandwidth_package_name": "tf-testacc-update",
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description":                 "testupdate",
+						"isp":                         "BGP",
+						"bandwidth":                   "1001",
+						"ratio":                       "100",
+						"internet_charge_type":        "PayByBandwidth",
+						"resource_group_id":           CHECKSET,
+						"zone":                        CHECKSET,
+						"security_protection_types.#": "1",
+						"bandwidth_package_name":      "tf-testacc-update",
+						"tags.%":                      "2",
+						"tags.Created":                "TF",
+						"tags.For":                    "Test",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"zone"},
+			},
+		},
+	})
+}
+
+// Test Cbwp CommonBandwidthPackage. <<< Resource test cases, automatically generated.

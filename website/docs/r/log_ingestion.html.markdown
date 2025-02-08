@@ -17,27 +17,43 @@ Log service ingestion, this service provides the function of importing logs of v
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_log_ingestion&exampleId=0a8f2c75-2eb9-48cf-cc0a-927585587c699e5d6cbe&activeTab=example&spm=docs.r.log_ingestion.0.0a8f2c752e&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-resource "alicloud_log_project" "example" {
-  name        = "tf-log-project"
-  description = "created by terraform"
-  tags        = { "test" : "test" }
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
 }
+
+resource "alicloud_log_project" "example" {
+  project_name = "terraform-example-${random_integer.default.result}"
+  description  = "terraform-example"
+  tags = {
+    Created = "TF",
+    For     = "example",
+  }
+}
+
 resource "alicloud_log_store" "example" {
-  project               = alicloud_log_project.example.name
-  name                  = "tf-log-logstore"
+  project_name          = alicloud_log_project.example.project_name
+  logstore_name         = "example-store"
   retention_period      = 3650
   shard_count           = 3
   auto_split            = true
   max_split_shard_count = 60
   append_meta           = true
 }
+
 resource "alicloud_log_ingestion" "example" {
-  project         = alicloud_log_project.example.name
-  logstore        = alicloud_log_store.example.name
-  ingestion_name  = "ingestion_name"
-  display_name    = "display_name"
-  description     = "oss2sls"
+  project         = alicloud_log_project.example.project_name
+  logstore        = alicloud_log_store.example.logstore_name
+  ingestion_name  = "terraform-example"
+  display_name    = "terraform-example"
+  description     = "terraform-example"
   interval        = "30m"
   run_immediately = true
   time_zone       = "+0800"

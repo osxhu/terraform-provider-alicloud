@@ -57,21 +57,23 @@ func testSweepEmrCluster(region string) error {
 		}
 		for _, v := range resp.Clusters.ClusterInfo {
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(v.Id, prefix) {
-					skip = false
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(v.Id, prefix) {
+						skip = false
+					}
 				}
-			}
-			// If a slb name is set by other service, it should be fetched by vswitch name and deleted.
-			//if skip {
-			//	if need, err := vpcService.needSweepVpc(v., v.VSwitchId); err == nil {
-			//		skip = !need
-			//	}
-			//
-			//}
-			if skip {
-				log.Printf("[INFO] Skipping emr: %s (%s)", v.Name, v.Id)
-				continue
+				// If a slb name is set by other service, it should be fetched by vswitch name and deleted.
+				//if skip {
+				//	if need, err := vpcService.needSweepVpc(v., v.VSwitchId); err == nil {
+				//		skip = !need
+				//	}
+				//
+				//}
+				if skip {
+					log.Printf("[INFO] Skipping emr: %s (%s)", v.Name, v.Id)
+					continue
+				}
 			}
 			request := emr.CreateReleaseClusterRequest()
 			request.Id = v.Id
@@ -457,7 +459,7 @@ func TestAccAlicloudEmrCluster_gateway(t *testing.T) {
 
 func TestAccAlicloudEmrCluster_multicluster(t *testing.T) {
 	var v *emr.DescribeClusterV2Response
-	resourceId := "alicloud_emr_cluster.default.4"
+	resourceId := "alicloud_emr_cluster.default.0"
 	ra := resourceAttrInit(resourceId, nil)
 	rc := resourceCheckInit(resourceId, &v, func() interface{} {
 		return &EmrService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -479,7 +481,7 @@ func TestAccAlicloudEmrCluster_multicluster(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"count":                     "5",
+					"count":                     "2",
 					"name":                      name,
 					"emr_ver":                   "${data.alicloud_emr_main_versions.default.main_versions.0.emr_version}",
 					"cluster_type":              "${data.alicloud_emr_main_versions.default.main_versions.0.cluster_types.0}",

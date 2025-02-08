@@ -1,5 +1,5 @@
 ---
-subcategory: "VPC"
+subcategory: "NAT Gateway"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_vpc_nat_ip_cidr"
 sidebar_current: "docs-alicloud-resource-vpc-nat-ip-cidr"
@@ -19,28 +19,34 @@ For information about VPC Nat Ip Cidr and how to use it, see [What is Nat Ip Cid
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_vpc_nat_ip_cidr&exampleId=000eaaad-f5a6-1069-db06-017eb984b300379dfd0f&activeTab=example&spm=docs.r.vpc_nat_ip_cidr.0.000eaaadf5&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
 data "alicloud_zones" "example" {
   available_resource_creation = "VSwitch"
 }
 
 resource "alicloud_vpc" "example" {
-  vpc_name   = "example_value"
+  vpc_name   = "terraform-example"
   cidr_block = "172.16.0.0/12"
 }
 
 resource "alicloud_vswitch" "example" {
-  vpc_id       = alicloud_vpc.default.id
+  vpc_id       = alicloud_vpc.example.id
   cidr_block   = "172.16.0.0/21"
   zone_id      = data.alicloud_zones.example.zones.0.id
-  vswitch_name = var.name
+  vswitch_name = "terraform-example"
 }
 
 resource "alicloud_nat_gateway" "example" {
-  vpc_id               = alicloud_vpc.default.id
+  vpc_id               = alicloud_vpc.example.id
   internet_charge_type = "PayByLcu"
-  nat_gateway_name     = "example_value"
-  description          = "example_value"
+  nat_gateway_name     = "terraform-example"
+  description          = "terraform-example"
   nat_type             = "Enhanced"
   vswitch_id           = alicloud_vswitch.example.id
   network_type         = "intranet"
@@ -48,10 +54,9 @@ resource "alicloud_nat_gateway" "example" {
 
 resource "alicloud_vpc_nat_ip_cidr" "example" {
   nat_gateway_id   = alicloud_nat_gateway.example.id
-  nat_ip_cidr_name = "example_value"
-  nat_ip_cidr      = "example_value"
+  nat_ip_cidr_name = "terraform-example"
+  nat_ip_cidr      = "192.168.0.0/16"
 }
-
 ```
 
 ## Argument Reference

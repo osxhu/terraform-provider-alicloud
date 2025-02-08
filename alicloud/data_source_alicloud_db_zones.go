@@ -21,9 +21,10 @@ func dataSourceAlicloudDBZones() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"multi": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
+				Type:       schema.TypeBool,
+				Optional:   true,
+				Default:    false,
+				Deprecated: "It has been deprecated from version 1.137.0 and using `multi_zone` instead.",
 			},
 			"multi_zone": {
 				Type:     schema.TypeBool,
@@ -35,7 +36,7 @@ func dataSourceAlicloudDBZones() *schema.Resource {
 				Optional:     true,
 				ForceNew:     true,
 				Default:      PostPaid,
-				ValidateFunc: validation.StringInSlice([]string{"PrePaid", "PostPaid"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"PrePaid", "PostPaid", "Serverless"}, false),
 			},
 			"engine": {
 				Type:         schema.TypeString,
@@ -48,19 +49,15 @@ func dataSourceAlicloudDBZones() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
-			"db_instance_class": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
 			"category": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Basic", "HighAvailability", "AlwaysOn", "Finance"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"Basic", "HighAvailability", "AlwaysOn", "Finance", "serverless_basic", "serverless_standard", "serverless_ha", "cluster"}, false),
 			},
 			"db_instance_storage_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"cloud_ssd", "local_ssd", "cloud_essd", "cloud_essd2", "cloud_essd3"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"cloud_ssd", "local_ssd", "cloud_essd", "cloud_essd2", "cloud_essd3", "general_essd", "cloud_auto"}, false),
 			},
 			"output_file": {
 				Type:     schema.TypeString,
@@ -115,6 +112,8 @@ func dataSourceAlicloudDBZonesRead(d *schema.ResourceData, meta interface{}) err
 	instanceChargeType := d.Get("instance_charge_type").(string)
 	if instanceChargeType == string(PostPaid) {
 		request["CommodityCode"] = "bards"
+	} else if instanceChargeType == string(Serverless) {
+		request["CommodityCode"] = "rds_serverless_public_cn"
 	} else {
 		request["CommodityCode"] = "rds"
 	}
@@ -134,17 +133,14 @@ func dataSourceAlicloudDBZonesRead(d *schema.ResourceData, meta interface{}) err
 	var ids []string
 	var s []map[string]interface{}
 	var response map[string]interface{}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	runtime := util.RuntimeOptions{}
 	runtime.SetAutoretry(true)
 	for _, engine := range engines {
 		request["Engine"] = engine
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()

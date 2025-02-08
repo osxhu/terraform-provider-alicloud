@@ -1,5 +1,5 @@
 ---
-subcategory: "Auto Scaling(ESS)"
+subcategory: "Auto Scaling"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_ess_lifecycle_hook"
 sidebar_current: "docs-alicloud-resource-ess-lifecycle-hook"
@@ -7,48 +7,77 @@ description: |-
   Provides a ESS lifecycle hook resource.
 ---
 
-# alicloud\_ess\_lifecycle\_hook
+# alicloud_ess_lifecycle_hook
 
 Provides a ESS lifecycle hook resource. More about Ess lifecycle hook, see [LifecycleHook](https://www.alibabacloud.com/help/doc-detail/73839.htm).
 
+-> **NOTE:** Available since v1.13.0.
+
 ## Example Usage
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_ess_lifecycle_hook&exampleId=43224bf8-0c9c-80bd-1a38-8a8f1e813f30d78a0ce8&activeTab=example&spm=docs.r.ess_lifecycle_hook.0.43224bf80c&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+variable "name" {
+  default = "terraform-example"
+}
+
+resource "random_integer" "default" {
+  min = 10000
+  max = 99999
+}
+
+locals {
+  name = "${var.name}-${random_integer.default.result}"
+}
+
 data "alicloud_zones" "default" {
   available_disk_category     = "cloud_efficiency"
   available_resource_creation = "VSwitch"
 }
 
-resource "alicloud_vpc" "foo" {
-  name       = "testAccEssScalingGroup_vpc"
+resource "alicloud_vpc" "default" {
+  vpc_name   = local.name
   cidr_block = "172.16.0.0/16"
 }
 
-resource "alicloud_vswitch" "foo" {
-  vpc_id     = alicloud_vpc.foo.id
-  cidr_block = "172.16.0.0/24"
-  zone_id    = data.alicloud_zones.default.zones[0].id
+resource "alicloud_vswitch" "default" {
+  vpc_id       = alicloud_vpc.default.id
+  cidr_block   = "172.16.0.0/24"
+  zone_id      = data.alicloud_zones.default.zones[0].id
+  vswitch_name = local.name
 }
 
-resource "alicloud_vswitch" "bar" {
-  vpc_id     = alicloud_vpc.foo.id
-  cidr_block = "172.16.1.0/24"
-  zone_id    = data.alicloud_zones.default.zones[0].id
+resource "alicloud_vswitch" "default2" {
+  vpc_id       = alicloud_vpc.default.id
+  cidr_block   = "172.16.1.0/24"
+  zone_id      = data.alicloud_zones.default.zones[0].id
+  vswitch_name = "${var.name}-bar"
 }
 
-resource "alicloud_ess_scaling_group" "foo" {
-  min_size           = 1
-  max_size           = 1
-  scaling_group_name = "testAccEssScaling_group"
+resource "alicloud_security_group" "default" {
+  name   = local.name
+  vpc_id = alicloud_vpc.default.id
+}
+
+resource "alicloud_ess_scaling_group" "default" {
+  min_size           = "1"
+  max_size           = "1"
+  scaling_group_name = local.name
+  default_cooldown   = 200
   removal_policies   = ["OldestInstance", "NewestInstance"]
-  vswitch_ids        = [alicloud_vswitch.foo.id, alicloud_vswitch.bar.id]
+  vswitch_ids        = [alicloud_vswitch.default.id, alicloud_vswitch.default2.id]
 }
 
-resource "alicloud_ess_lifecycle_hook" "foo" {
-  scaling_group_id      = alicloud_ess_scaling_group.foo.id
-  name                  = "testAccEssLifecycle_hook"
+resource "alicloud_ess_lifecycle_hook" "default" {
+  scaling_group_id      = alicloud_ess_scaling_group.default.id
+  name                  = local.name
   lifecycle_transition  = "SCALE_OUT"
   heartbeat_timeout     = 400
-  notification_metadata = "helloworld"
+  notification_metadata = "example"
 }
 ```
 

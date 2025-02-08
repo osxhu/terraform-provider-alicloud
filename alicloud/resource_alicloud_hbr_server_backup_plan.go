@@ -6,7 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -95,6 +96,23 @@ func resourceAlicloudHbrServerBackupPlan() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 			},
+			"cross_account_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				Computed:     true,
+				ValidateFunc: validation.StringInSlice([]string{"SELF_ACCOUNT", "CROSS_ACCOUNT"}, false),
+			},
+			"cross_account_user_id": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				ForceNew: true,
+			},
+			"cross_account_role_name": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 		},
 	}
 }
@@ -105,10 +123,7 @@ func resourceAlicloudHbrServerBackupPlanCreate(d *schema.ResourceData, meta inte
 	var response map[string]interface{}
 	action := "CreateBackupPlan"
 	request := make(map[string]interface{})
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["BackupType"] = "COMPLETE"
 	if v, err := hbrService.convertDetailToString(d.Get("detail").(*schema.Set).List()); err == nil {
 		request["Detail"] = v
@@ -124,9 +139,21 @@ func resourceAlicloudHbrServerBackupPlanCreate(d *schema.ResourceData, meta inte
 	request["Schedule"] = d.Get("schedule")
 	request["SourceType"] = "UDM_ECS"
 
+	if v, ok := d.GetOk("cross_account_type"); ok {
+		request["CrossAccountType"] = v
+	}
+
+	if v, ok := d.GetOk("cross_account_user_id"); ok {
+		request["CrossAccountUserId"] = v
+	}
+
+	if v, ok := d.GetOk("cross_account_role_name"); ok {
+		request["CrossAccountRoleName"] = v
+	}
+
 	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
+		response, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -148,6 +175,7 @@ func resourceAlicloudHbrServerBackupPlanCreate(d *schema.ResourceData, meta inte
 
 	return resourceAlicloudHbrServerBackupPlanUpdate(d, meta)
 }
+
 func resourceAlicloudHbrServerBackupPlanRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	hbrService := HbrService{client}
@@ -180,20 +208,23 @@ func resourceAlicloudHbrServerBackupPlanRead(d *schema.ResourceData, meta interf
 			return WrapError(err)
 		}
 	}
+
 	d.Set("ecs_server_backup_plan_name", object["PlanName"])
 	d.Set("instance_id", object["InstanceId"])
 	d.Set("retention", formatInt(object["Retention"]))
 	d.Set("schedule", object["Schedule"])
 	d.Set("disabled", object["Disabled"])
+	d.Set("cross_account_type", object["CrossAccountType"])
+	d.Set("cross_account_user_id", formatInt(object["CrossAccountUserId"]))
+	d.Set("cross_account_role_name", object["CrossAccountRoleName"])
+
 	return nil
 }
+
 func resourceAlicloudHbrServerBackupPlanUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	hbrService := HbrService{client}
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	d.Partial(true)
 
@@ -227,8 +258,8 @@ func resourceAlicloudHbrServerBackupPlanUpdate(d *schema.ResourceData, meta inte
 	if update {
 		action := "UpdateBackupPlan"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
-		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
+			response, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -270,8 +301,8 @@ func resourceAlicloudHbrServerBackupPlanUpdate(d *schema.ResourceData, meta inte
 				action = "DisableBackupPlan"
 			}
 			wait := incrementalWait(3*time.Second, 3*time.Second)
-			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
+				response, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -295,22 +326,20 @@ func resourceAlicloudHbrServerBackupPlanUpdate(d *schema.ResourceData, meta inte
 	d.Partial(false)
 	return resourceAlicloudHbrServerBackupPlanRead(d, meta)
 }
+
 func resourceAlicloudHbrServerBackupPlanDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteBackupPlan"
 	var response map[string]interface{}
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"PlanId": d.Id(),
 	}
 
 	request["SourceType"] = "UDM_ECS"
 	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
+		response, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

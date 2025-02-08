@@ -2,7 +2,6 @@ package alicloud
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -10,10 +9,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
 
-func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
+func TestAccAliCloudEventBridgeRule_basic0(t *testing.T) {
 	var v map[string]interface{}
+	testAccPreCheckWithRegions(t, true, connectivity.EventBridgeSupportRegions)
 	resourceId := "alicloud_event_bridge_rule.default"
-	ra := resourceAttrInit(resourceId, AlicloudEventBridgeRuleMap0)
+	ra := resourceAttrInit(resourceId, AliCloudEventBridgeRuleMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &EventbridgeService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeEventBridgeRule")
@@ -21,11 +21,10 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%seventbridgerule%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudEventBridgeRuleBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudEventBridgeRuleBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, true, connectivity.EventBridgeSupportRegions)
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -34,26 +33,26 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"event_bus_name": "${alicloud_event_bridge_event_bus.default.event_bus_name}",
-					"rule_name":      "${var.name}",
+					"rule_name":      name,
 					"filter_pattern": `{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}`,
 					"targets": []map[string]interface{}{
 						{
-							"endpoint":  "${local.mns_endpoint_a}",
-							"target_id": "tf-test1",
+							"target_id": name,
 							"type":      "acs.mns.queue",
+							"endpoint":  "${local.mns_endpoint}",
 							"param_list": []map[string]interface{}{
 								{
-									"form":         "CONSTANT",
-									"resource_key": "queue",
-									"value":        "tf-testaccEbRule",
-								},
-								{
-									"form":         "ORIGINAL",
 									"resource_key": "Body",
+									"form":         "ORIGINAL",
 								},
 								{
+									"resource_key": "queue",
 									"form":         "CONSTANT",
+									"value":        name,
+								},
+								{
 									"resource_key": "IsBase64Encode",
+									"form":         "CONSTANT",
 									"value":        "true",
 								},
 							},
@@ -62,95 +61,10 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"rule_name":      name,
+						"rule_name":      CHECKSET,
 						"event_bus_name": name,
 						"filter_pattern": "{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}",
 						"targets.#":      "1",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"targets": []map[string]interface{}{
-						{
-							"endpoint":  "${local.mns_endpoint_b}",
-							"target_id": "tf-test1",
-							"type":      "acs.mns.queue",
-							"param_list": []map[string]interface{}{
-								{
-									"form":         "CONSTANT",
-									"resource_key": "queue",
-									"value":        "tf-testaccEbRule",
-								},
-								{
-									"form":         "JSONPATH",
-									"resource_key": "Body",
-									"value":        "$.data.name",
-								},
-							},
-						},
-					},
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"targets.#": "1",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"targets": []map[string]interface{}{
-						{
-							"endpoint":  "${local.mns_endpoint_b}",
-							"target_id": "tf-test1",
-							"type":      "acs.mns.queue",
-							"param_list": []map[string]interface{}{
-								{
-									"form":         "CONSTANT",
-									"resource_key": "queue",
-									"value":        "tf-testaccEbRule",
-								},
-								{
-									"form":         "CONSTANT",
-									"resource_key": "Body",
-									"value":        "tf-testAcc",
-								},
-							},
-						},
-					},
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"targets.#": "1",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"targets": []map[string]interface{}{
-						{
-							"endpoint":  "${local.mns_endpoint_b}",
-							"target_id": "tf-test1",
-							"type":      "acs.mns.queue",
-							"param_list": []map[string]interface{}{
-								{
-									"form":         "CONSTANT",
-									"resource_key": "queue",
-									"value":        "tf-testaccEbRule",
-								},
-								{
-									"form":         "TEMPLATE",
-									"resource_key": "Body",
-									"template":     "This is $${v1}",
-									"value":        `{\n \"v1\":\"$.source\" \n}`,
-								},
-							},
-						},
-					},
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"targets.#": "1",
 					}),
 				),
 			},
@@ -166,11 +80,11 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"description": name + "update",
+					"description": name,
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"description": name + "update",
+						"description": name,
 					}),
 				),
 			},
@@ -196,62 +110,27 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"description":    name,
-					"filter_pattern": `{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}`,
 					"targets": []map[string]interface{}{
 						{
-							"endpoint":  "${local.mns_endpoint_a}",
-							"target_id": "tf-test1",
-							"type":      "acs.mns.queue",
-							"param_list": []map[string]interface{}{
-								{
-									"form":         "CONSTANT",
-									"resource_key": "queue",
-									"value":        "tf-testaccEbRule",
-								},
-								{
-									"form":         "ORIGINAL",
-									"resource_key": "Body",
-								},
-							},
-						},
-					},
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"description":    name,
-						"filter_pattern": "{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}",
-						"targets.#":      "1",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"targets": []map[string]interface{}{
-						{
-							"endpoint":            "http://test.com",
-							"target_id":           "tf-test1",
-							"type":                "http",
+							"target_id":           name,
+							"type":                "acs.fnf",
+							"endpoint":            "${local.fnf_endpoint}",
 							"push_retry_strategy": "BACKOFF_RETRY",
-							"dead_letter_queue": []map[string]interface{}{
-								{
-									"arn": "acs:mns:" + os.Getenv("ALICLOUD_REGION") + ":" + os.Getenv("ALICLOUD_ACCOUNT_ID") + "/queues/rule-deadletterqueue",
-								},
-							},
 							"param_list": []map[string]interface{}{
 								{
-									"form":         "CONSTANT",
-									"resource_key": "url",
-									"value":        "http://test.com",
+									"resource_key": "Input",
+									"form":         "JSONPATH",
+									"value":        "$.data.name",
 								},
 								{
-									"form":         "ORIGINAL",
-									"resource_key": "Body",
+									"resource_key": "FlowName",
+									"form":         "CONSTANT",
+									"value":        "demoFlow",
 								},
 								{
+									"resource_key": "RoleName",
 									"form":         "CONSTANT",
-									"resource_key": "Network",
-									"value":        "PublicNetwork",
+									"value":        "roleToEB",
 								},
 							},
 						},
@@ -267,28 +146,30 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 				Config: testAccConfig(map[string]interface{}{
 					"targets": []map[string]interface{}{
 						{
-							"endpoint":            "http://tftest.com",
+							"target_id":           name,
 							"type":                "http",
-							"target_id":           "tf-test1",
+							"endpoint":            "http://www.aliyun.com",
 							"push_retry_strategy": "EXPONENTIAL_DECAY_RETRY",
 							"dead_letter_queue": []map[string]interface{}{
 								{
-									"arn": "acs:mq:" + os.Getenv("ALICLOUD_REGION") + ":" + os.Getenv("ALICLOUD_ACCOUNT_ID") + "/instances/myinstance/topic/mytopic",
+									"arn": "${local.mns_endpoint}",
 								},
 							},
 							"param_list": []map[string]interface{}{
 								{
-									"form":         "CONSTANT",
-									"resource_key": "url",
-									"value":        "http://tftest.com",
-								},
-								{
-									"form":         "ORIGINAL",
 									"resource_key": "Body",
+									"form":         "TEMPLATE",
+									"template":     "This is $${v1}",
+									"value":        `{\n \"v1\":\"$.source\" \n}`,
 								},
 								{
+									"resource_key": "url",
 									"form":         "CONSTANT",
+									"value":        "http://www.aliyun.com",
+								},
+								{
 									"resource_key": "Network",
+									"form":         "CONSTANT",
 									"value":        "PublicNetwork",
 								},
 							},
@@ -310,39 +191,110 @@ func TestAccAlicloudEventBridgeRule_basic0(t *testing.T) {
 	})
 }
 
-var AlicloudEventBridgeRuleMap0 = map[string]string{
-	"event_bus_name": CHECKSET,
-	"rule_name":      CHECKSET,
-	"targets.#":      "1",
-	"description":    "",
-	"status":         CHECKSET,
-	"filter_pattern": "",
+func TestAccAliCloudEventBridgeRule_basic0_twin(t *testing.T) {
+	var v map[string]interface{}
+	testAccPreCheckWithRegions(t, true, connectivity.EventBridgeSupportRegions)
+	resourceId := "alicloud_event_bridge_rule.default"
+	ra := resourceAttrInit(resourceId, AliCloudEventBridgeRuleMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &EventbridgeService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeEventBridgeRule")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%seventbridgerule%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudEventBridgeRuleBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"event_bus_name": "${alicloud_event_bridge_event_bus.default.event_bus_name}",
+					"rule_name":      name,
+					"filter_pattern": `{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}`,
+					"description":    name,
+					"status":         "ENABLE",
+					"targets": []map[string]interface{}{
+						{
+							"target_id":           name,
+							"type":                "http",
+							"endpoint":            "http://www.aliyun.com",
+							"push_retry_strategy": "EXPONENTIAL_DECAY_RETRY",
+							"dead_letter_queue": []map[string]interface{}{
+								{
+									"arn": "${local.mns_endpoint}",
+								},
+							},
+							"param_list": []map[string]interface{}{
+								{
+									"resource_key": "Body",
+									"form":         "TEMPLATE",
+									"template":     "This is $${v1}",
+									"value":        `{\n \"v1\":\"$.source\" \n}`,
+								},
+								{
+									"resource_key": "url",
+									"form":         "CONSTANT",
+									"value":        "http://www.aliyun.com",
+								},
+								{
+									"resource_key": "Network",
+									"form":         "CONSTANT",
+									"value":        "PublicNetwork",
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"rule_name":      CHECKSET,
+						"event_bus_name": name,
+						"filter_pattern": "{\"source\":[\"crmabc.newsletter\"],\"type\":[\"UserSignUp\", \"UserLogin\"]}",
+						"description":    name,
+						"status":         "ENABLE",
+						"targets.#":      "1",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
 }
 
-func AlicloudEventBridgeRuleBasicDependence0(name string) string {
+var AliCloudEventBridgeRuleMap0 = map[string]string{
+	"status": CHECKSET,
+}
+
+func AliCloudEventBridgeRuleBasicDependence0(name string) string {
 	return fmt.Sprintf(` 
-variable "name" {
-  default = "%[1]s"
-}
+	variable "name" {
+  		default = "%[1]s"
+	}
 
-data "alicloud_account" "default" {}
+	data "alicloud_account" "default" {
+	}
 
-locals {
-  mns_endpoint_a =format("acs:mns:%[2]s:%%s:queues/%%s",data.alicloud_account.default.id,alicloud_mns_queue.queue1.name) 
-  mns_endpoint_b =format("acs:mns:%[2]s:%%s:queues/%%s",data.alicloud_account.default.id,alicloud_mns_queue.queue2.name) 
-}
+	resource "alicloud_event_bridge_event_bus" "default" {
+  		event_bus_name = var.name
+	}
 
-resource "alicloud_event_bridge_event_bus" "default" {
-	event_bus_name = var.name
-}
+	resource "alicloud_mns_queue" "default" {
+  		name = var.name
+	}
 
-resource "alicloud_mns_queue" "queue1" {
-  name  = var.name
-}
-
-resource "alicloud_mns_queue" "queue2" {
-  name  = format("%%schange", var.name)
-}
-
+	locals {
+  		mns_endpoint = format("acs:mns:%[2]s:%%s:queues/%%s", data.alicloud_account.default.id, alicloud_mns_queue.default.name)
+  		fnf_endpoint   = format("acs:fnf:%[2]s:%%s:flow/$${flow}", data.alicloud_account.default.id)
+	}
 `, name, defaultRegionToTest)
 }

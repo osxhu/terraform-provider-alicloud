@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
@@ -16,19 +15,14 @@ type CloudssoService struct {
 
 func (s *CloudssoService) GetDirectory(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetDirectory"
 	request := map[string]interface{}{
 		"DirectoryId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -54,19 +48,14 @@ func (s *CloudssoService) GetDirectory(id string) (object map[string]interface{}
 }
 func (s *CloudssoService) GetMFAAuthenticationStatus(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetMFAAuthenticationStatus"
 	request := map[string]interface{}{
 		"DirectoryId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -92,19 +81,14 @@ func (s *CloudssoService) GetMFAAuthenticationStatus(id string) (object map[stri
 }
 func (s *CloudssoService) GetSCIMSynchronizationStatus(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetSCIMSynchronizationStatus"
 	request := map[string]interface{}{
 		"DirectoryId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -130,19 +114,14 @@ func (s *CloudssoService) GetSCIMSynchronizationStatus(id string) (object map[st
 }
 func (s *CloudssoService) GetDirectoryTasks(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListTasks"
 	request := map[string]interface{}{
 		"DirectoryId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -169,19 +148,14 @@ func (s *CloudssoService) GetDirectoryTasks(id string) (object map[string]interf
 }
 func (s *CloudssoService) GetExternalSAMLIdentityProvider(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetExternalSAMLIdentityProvider"
 	request := map[string]interface{}{
 		"DirectoryId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -229,10 +203,7 @@ func (s *CloudssoService) DescribeCloudSsoDirectory(id string) (object map[strin
 
 func (s *CloudssoService) DescribeCloudSsoScimServerCredential(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListSCIMServerCredentials"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -243,11 +214,9 @@ func (s *CloudssoService) DescribeCloudSsoScimServerCredential(id string) (objec
 		"DirectoryId": parts[0],
 	}
 	idExist := false
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -284,10 +253,7 @@ func (s *CloudssoService) DescribeCloudSsoScimServerCredential(id string) (objec
 }
 
 func (s *CloudssoService) DescribeCloudSsoGroup(id string) (object map[string]interface{}, err error) {
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return object, WrapError(err)
-	}
+	client := s.client
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
 		err = WrapError(err)
@@ -300,11 +266,9 @@ func (s *CloudssoService) DescribeCloudSsoGroup(id string) (object map[string]in
 
 	var response map[string]interface{}
 	action := "GetGroup"
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		resp, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		resp, err := client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -331,10 +295,7 @@ func (s *CloudssoService) DescribeCloudSsoGroup(id string) (object map[string]in
 
 func (s *CloudssoService) DescribeCloudSsoUser(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetUser"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -345,11 +306,9 @@ func (s *CloudssoService) DescribeCloudSsoUser(id string) (object map[string]int
 		"DirectoryId": parts[0],
 		"UserId":      parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -376,10 +335,7 @@ func (s *CloudssoService) DescribeCloudSsoUser(id string) (object map[string]int
 
 func (s *CloudssoService) ListMFADevicesForUser(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListMFADevicesForUser"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -390,11 +346,9 @@ func (s *CloudssoService) ListMFADevicesForUser(id string) (object map[string]in
 		"DirectoryId": parts[0],
 		"UserId":      parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -421,25 +375,23 @@ func (s *CloudssoService) ListMFADevicesForUser(id string) (object map[string]in
 
 func (s *CloudssoService) DescribeCloudSsoAccessConfiguration(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
+	action := "GetAccessConfiguration"
+
+	client := s.client
+
+	parts, err := ParseResourceId(id, 2)
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	action := "GetAccessConfiguration"
-	parts, err := ParseResourceId(id, 2)
-	if err != nil {
-		err = WrapError(err)
-		return
-	}
+
 	request := map[string]interface{}{
-		"AccessConfigurationId": parts[1],
 		"DirectoryId":           parts[0],
+		"AccessConfigurationId": parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -450,41 +402,43 @@ func (s *CloudssoService) DescribeCloudSsoAccessConfiguration(id string) (object
 		return nil
 	})
 	addDebug(action, response, request)
+
 	if err != nil {
 		if IsExpectedErrors(err, []string{"EntityNotExists.AccessConfiguration"}) {
-			return object, WrapErrorf(Error(GetNotFoundMessage("CloudSSO:AccessConfiguration", id)), NotFoundMsg, ProviderERROR, fmt.Sprint(response["RequestId"]))
+			return object, WrapErrorf(Error(GetNotFoundMessage("CloudSSO:AccessConfiguration", id)), NotFoundWithResponse, response)
 		}
 		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 	}
+
 	v, err := jsonpath.Get("$.AccessConfiguration", response)
 	if err != nil {
 		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.AccessConfiguration", response)
 	}
+
 	object = v.(map[string]interface{})
+
 	return object, nil
 }
 
 func (s *CloudssoService) ListPermissionPoliciesInAccessConfiguration(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
+	action := "ListPermissionPoliciesInAccessConfiguration"
+
+	client := s.client
+
+	parts, err := ParseResourceId(id, 2)
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	action := "ListPermissionPoliciesInAccessConfiguration"
-	parts, err := ParseResourceId(id, 2)
-	if err != nil {
-		err = WrapError(err)
-		return
-	}
+
 	request := map[string]interface{}{
-		"AccessConfigurationId": parts[1],
 		"DirectoryId":           parts[0],
+		"AccessConfigurationId": parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -495,9 +449,10 @@ func (s *CloudssoService) ListPermissionPoliciesInAccessConfiguration(id string)
 		return nil
 	})
 	addDebug(action, response, request)
+
 	if err != nil {
 		if IsExpectedErrors(err, []string{"EntityNotExists.AccessConfiguration"}) {
-			return object, WrapErrorf(Error(GetNotFoundMessage("CloudSSO:AccessConfiguration", id)), NotFoundMsg, ProviderERROR, fmt.Sprint(response["RequestId"]))
+			return object, WrapErrorf(Error(GetNotFoundMessage("CloudSSO:AccessConfiguration", id)), NotFoundWithResponse, response)
 		}
 		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 	}
@@ -507,10 +462,7 @@ func (s *CloudssoService) ListPermissionPoliciesInAccessConfiguration(id string)
 
 func (s *CloudssoService) DescribeCloudSsoUserAttachment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListGroupMembers"
 	parts, err := ParseResourceId(id, 3)
 	if err != nil {
@@ -524,12 +476,10 @@ func (s *CloudssoService) DescribeCloudSsoUserAttachment(id string) (object map[
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
 
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 			if err != nil {
 
 				if NeedRetry(err) {
@@ -576,10 +526,7 @@ func (s *CloudssoService) DescribeCloudSsoUserAttachment(id string) (object map[
 
 func (s *CloudssoService) DescribeCloudSsoAccessAssignment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListAccessAssignments"
 	parts, err := ParseResourceId(id, 6)
 	if err != nil {
@@ -594,11 +541,9 @@ func (s *CloudssoService) DescribeCloudSsoAccessAssignment(id string) (object ma
 		"PrincipalType":         parts[4],
 		"PrincipalId":           parts[5],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -632,20 +577,15 @@ func (s *CloudssoService) DescribeCloudSsoAccessAssignment(id string) (object ma
 
 func (s *CloudssoService) GetTaskStatus(directoryId, taskId string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetTaskStatus"
 	request := map[string]interface{}{
 		"DirectoryId": directoryId,
 		"TaskId":      taskId,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -693,10 +633,7 @@ func (s *CloudssoService) CloudssoServiceAccessAssignmentStateRefreshFunc(direct
 
 func (s *CloudssoService) DescribeCloudSsoAccessConfigurationProvisioning(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListAccessConfigurationProvisionings"
 	parts, err := ParseResourceId(id, 4)
 	if err != nil {
@@ -709,11 +646,9 @@ func (s *CloudssoService) DescribeCloudSsoAccessConfigurationProvisioning(id str
 		"TargetId":              parts[3],
 		"TargetType":            parts[2],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -769,10 +704,7 @@ func (s *CloudssoService) CloudssoServicAccessConfigurationProvisioning(director
 	var response map[string]interface{}
 	action := "ProvisionAccessConfiguration"
 	request := make(map[string]interface{})
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	client := s.client
 
 	request["DirectoryId"] = directoryId
 	request["AccessConfigurationId"] = accessConfigurationId
@@ -781,7 +713,7 @@ func (s *CloudssoService) CloudssoServicAccessConfigurationProvisioning(director
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(10*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"OperationConflict.Task"}) || NeedRetry(err) {
 				wait()
@@ -816,10 +748,7 @@ func (s *CloudssoService) CloudssoServicAccessConfigurationProvisioning(director
 
 func (s *CloudssoService) DescribeCloudSsoAccessConfigurationProvisionings(directoryId, accessConfigurationId string) (objects []map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewCloudssoClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 
 	action := "ListAccessConfigurationProvisionings"
 	request := map[string]interface{}{
@@ -829,11 +758,9 @@ func (s *CloudssoService) DescribeCloudSsoAccessConfigurationProvisionings(direc
 	}
 
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2021-05-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("cloudsso", "2021-05-15", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()

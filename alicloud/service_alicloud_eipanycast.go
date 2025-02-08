@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
@@ -15,18 +14,13 @@ type EipanycastService struct {
 
 func (s *EipanycastService) DescribeEipanycastAnycastEipAddress(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewEipanycastClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAnycastEipAddress"
 	request := map[string]interface{}{
 		"RegionId":  s.client.RegionId,
 		"AnycastId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-09"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("Eipanycast", "2020-03-09", action, nil, request, true)
 	if err != nil {
 		err = WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		return
@@ -53,10 +47,10 @@ func (s *EipanycastService) EipanycastAnycastEipAddressStateRefreshFunc(id strin
 
 		for _, failState := range failStates {
 			if object["Status"].(string) == failState {
-				return object, object["Status"].(string), WrapError(Error(FailedToReachTargetStatus, object["Status"].(string)))
+				return object, fmt.Sprint(object["Status"]), WrapError(Error(FailedToReachTargetStatus, object["Status"].(string)))
 			}
 		}
-		return object, object["Status"].(string), nil
+		return object, fmt.Sprint(object["Status"]), nil
 	}
 }
 
@@ -66,18 +60,13 @@ func (s *EipanycastService) DescribeEipanycastAnycastEipAddressAttachment(id str
 		return nil, WrapError(err)
 	}
 	var response map[string]interface{}
-	conn, err := s.client.NewEipanycastClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAnycastEipAddress"
 	request := map[string]interface{}{
 		"RegionId":  s.client.RegionId,
 		"AnycastId": parts[0],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-09"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("Eipanycast", "2020-03-09", action, nil, request, true)
 	if err != nil {
 		err = WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		return

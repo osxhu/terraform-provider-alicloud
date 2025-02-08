@@ -11,7 +11,7 @@ description: |-
 
 Provides a Hybrid Backup Recovery (HBR) Hana Instance resource.
 
-For information about Hybrid Backup Recovery (HBR) Hana Instance and how to use it, see [What is Hana Instance](https://www.alibabacloud.com/help/en/hybrid-backup-recovery/latest/api-doc-hbr-2017-09-08-api-doc-createhanainstance).
+For information about Hybrid Backup Recovery (HBR) Hana Instance and how to use it, see [What is Hana Instance](https://www.alibabacloud.com/help/en/hybrid-backup-recovery/latest/api-hbr-2017-09-08-createhanainstance).
 
 -> **NOTE:** Available in v1.178.0+.
 
@@ -21,17 +21,29 @@ For information about Hybrid Backup Recovery (HBR) Hana Instance and how to use 
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_hbr_hana_instance&exampleId=530e500c-6119-001b-373a-6eb81c410aca8e4bb25b&activeTab=example&spm=docs.r.hbr_hana_instance.0.530e500c61&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-resource "alicloud_hbr_vault" "example" {
-  vault_name = var.name
-}
 data "alicloud_resource_manager_resource_groups" "example" {
   status = "OK"
 }
 
+resource "random_integer" "default" {
+  min = 10000
+  max = 99999
+}
+
+resource "alicloud_hbr_vault" "example" {
+  vault_name = "terraform-example-${random_integer.default.result}"
+}
+
 resource "alicloud_hbr_hana_instance" "example" {
   alert_setting        = "INHERITED"
-  hana_name            = var.name
+  hana_name            = "terraform-example-${random_integer.default.result}"
   host                 = "1.1.1.1"
   instance_number      = 1
   password             = "YouPassword123"

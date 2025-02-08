@@ -139,7 +139,9 @@ func TestAccAlicloudFCTrigger_log(t *testing.T) {
 			{
 				Config: testAlicloudFCTriggerLog(testTriggerLogTemplate, testFCLogRoleTemplate, testFCLogPolicyTemplate, name),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(nil),
+					testAccCheck(map[string]string{
+						"config": CHECKSET,
+					}),
 				),
 			},
 			{
@@ -151,7 +153,9 @@ func TestAccAlicloudFCTrigger_log(t *testing.T) {
 			{
 				Config: testAlicloudFCTriggerLogUpdate(testTriggerLogTemplateUpdate, testFCLogRoleTemplate, testFCLogPolicyTemplate, name),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(nil),
+					testAccCheck(map[string]string{
+						"config": CHECKSET,
+					}),
 				),
 			},
 		},
@@ -193,7 +197,7 @@ func TestAccAlicloudFCTrigger_mnsTopic(t *testing.T) {
 
 func TestAccAlicloudFCTrigger_cdn_events(t *testing.T) {
 	var v *fc.GetTriggerOutput
-	rand := acctest.RandIntRange(10000, 999999)
+	rand := acctest.RandIntRange(100000, 9999999)
 	name := fmt.Sprintf("tf-testacc%s-%d", defaultRegionToTest, rand)
 	var basicMap = map[string]string{
 		"service":       CHECKSET,
@@ -213,7 +217,7 @@ func TestAccAlicloudFCTrigger_cdn_events(t *testing.T) {
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheckWithRegions(t, false, connectivity.FcNoSupportedRegions) },
+		PreCheck:     func() { testAccPreCheckWithRegions(t, true, connectivity.FCV2FunctionSupportRegions) },
 		Providers:    testAccProviders,
 		CheckDestroy: rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
@@ -261,7 +265,7 @@ func TestAccAlicloudFCTrigger_eventbridge_With_Default_EventSource(t *testing.T)
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheckWithRegions(t, false, connectivity.FcNoSupportedRegions) },
+		PreCheck:     func() { testAccPreCheckWithRegions(t, true, connectivity.FCV2FunctionSupportRegions) },
 		Providers:    testAccProviders,
 		CheckDestroy: rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
@@ -308,7 +312,7 @@ func TestAccAlicloudFCTrigger_eventbridge_With_MNS_EventSource(t *testing.T) {
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheckWithRegions(t, false, connectivity.FcNoSupportedRegions) },
+		PreCheck:     func() { testAccPreCheckWithRegions(t, true, connectivity.FCV2FunctionSupportRegions) },
 		Providers:    testAccProviders,
 		CheckDestroy: rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
@@ -386,7 +390,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 resource "alicloud_ram_role" "default" {
@@ -514,7 +518,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 
@@ -611,7 +615,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 
@@ -654,45 +658,49 @@ resource "alicloud_ram_role_policy_attachment" "default" {
 }
 
 var testTriggerLogTemplate = `
-    {
-        "sourceConfig": {
-            "logstore": "${alicloud_log_store.default.name}"
-        },
-        "jobConfig": {
-            "maxRetryTime": 3,
-            "triggerInterval": 60
-        },
-        "functionParameter": {
-            "a": "b",
-            "c": "d"
-        },
-        "logConfig": {
-            "project": "${alicloud_log_project.default.name}",
-            "logstore": "${alicloud_log_store.default1.name}"
-        },
-        "enable": true
-    }
+	{
+		"sourceConfig":{
+			"logstore":"${alicloud_log_store.default.name}",
+			"startTime":null
+		},
+		"jobConfig":{
+			"maxRetryTime":3,
+			"triggerInterval":60
+		},
+		"functionParameter":{
+			"a":"b",
+			"c":"d"
+		},
+		"logConfig":{
+			"project":"${alicloud_log_project.default.name}",
+			"logstore":"${alicloud_log_store.default1.name}"
+		},
+		"enable":true,
+		"targetConfig":null
+	}
 `
 
 var testTriggerLogTemplateUpdate = `
-    {
-        "sourceConfig": {
-            "logstore": "${alicloud_log_store.default.name}"
-        },
-        "jobConfig": {
-            "maxRetryTime": 4,
-            "triggerInterval": 100
-        },
-        "functionParameter": {
-            "a": "bb",
-            "c": "dd"
-        },
-        "logConfig": {
-            "project": "${alicloud_log_project.default.name}",
-            "logstore": "${alicloud_log_store.default1.name}"
-        },
-        "enable": true
-    }
+	{
+		"sourceConfig":{
+			"logstore":"${alicloud_log_store.default.name}",
+			"startTime":null
+		},
+		"jobConfig":{
+			"maxRetryTime":4,
+			"triggerInterval":100
+		},
+		"functionParameter":{
+            "a":"bb",
+            "c":"dd"
+		},
+		"logConfig":{
+			"project":"${alicloud_log_project.default.name}",
+			"logstore":"${alicloud_log_store.default1.name}"
+		},
+		"enable":true,
+		"targetConfig":null
+	}
 `
 var testFCLogPolicyTemplate = `
     {
@@ -780,7 +788,6 @@ var testFCcdnRoleTemplate = `
    "Statement": [
       {
          "Action": "cdn:Describe*",
-         "Resource": "*",
          "Effect": "Allow",
 		 "Principal": {
            "Service": [
@@ -793,58 +800,110 @@ var testFCcdnRoleTemplate = `
 `
 
 var testTriggerEventBridgeWithDefaultSourceTemplate = `
-    {
-        "triggerEnable": false,
-		"asyncInvocationType": false,
-      	"eventRuleFilterPattern": "{\"source\":[\"acs.oss\"],\"type\":[\"oss:BucketCreated:PutBucket\"]}",
-      	"eventSourceConfig": {
-			"eventSourceType": "Default"
-      	}
+{
+    "triggerEnable":false,
+    "asyncInvocationType":false,
+    "eventSourceConfig":{
+        "eventSourceType":"Default"
+    },
+    "eventRuleFilterPattern":"{\"source\":[\"acs.oss\"],\"type\":[\"oss:BucketCreated:PutBucket\"]}",
+    "eventSinkConfig":{
+        "deliveryOption":{
+            "mode":"event-driven",
+            "eventSchema":"CloudEvents"
+        }
+    },
+    "runOptions":{
+        "retryStrategy":{
+            "PushRetryStrategy":"BACKOFF_RETRY"
+        },
+        "errorsTolerance":"ALL",
+        "mode":"event-driven"
     }
+}
 `
 
 var testTriggerEventBridgeWithDefaultSourceTemplateUpdate = `
-    {
-        "triggerEnable": true,
-		"asyncInvocationType": true,
-      	"eventRuleFilterPattern": "{}",
-      	"eventSourceConfig": {
-			"eventSourceType": "Default"
-      	}
+{
+    "triggerEnable":true,
+    "asyncInvocationType":true,
+    "eventSourceConfig":{
+        "eventSourceType":"Default"
+    },
+    "eventRuleFilterPattern":"{}",
+    "eventSinkConfig":{
+        "deliveryOption":{
+            "mode":"event-driven",
+            "eventSchema":"CloudEvents"
+        }
+    },
+    "runOptions":{
+        "retryStrategy":{
+            "PushRetryStrategy":"BACKOFF_RETRY"
+        },
+        "errorsTolerance":"ALL",
+        "mode":"event-driven"
     }
+}
 `
 
 var testTriggerEventBridgeWithMNSSourceTemplate = `
-    {
-        "triggerEnable": false,
-		"asyncInvocationType": false,
-      	"eventRuleFilterPattern": "{}",
-      	"eventSourceConfig": {
-			"eventSourceType": "MNS",
-			"eventSourceParameters": {
-				"sourceMNSParameters": {
-					"QueueName": "test",
-					"IsBase64Decode": false
-				}
-			}
-      	}
+{
+    "triggerEnable":false,
+    "asyncInvocationType":false,
+    "eventSourceConfig":{
+        "eventSourceType":"MNS",
+        "eventSourceParameters":{
+            "sourceMNSParameters":{
+                "QueueName":"test",
+                "IsBase64Decode":false
+            }
+        }
+    },
+    "eventRuleFilterPattern":"{}",
+    "eventSinkConfig":{
+        "deliveryOption":{
+            "mode":"event-driven",
+            "eventSchema":"CloudEvents"
+        }
+    },
+    "runOptions":{
+        "retryStrategy":{
+            "PushRetryStrategy":"BACKOFF_RETRY"
+        },
+        "errorsTolerance":"ALL",
+        "mode":"event-driven"
     }
+}
 `
 var testTriggerEventBridgeWithMNSSourceTemplateUpdate = `
-    {
-        "triggerEnable": true,
-		"asyncInvocationType": true,
-      	"eventRuleFilterPattern": "{}",
-      	"eventSourceConfig": {
-			"eventSourceType": "MNS",
-			"eventSourceParameters": {
-				"sourceMNSParameters": {
-					"QueueName": "test-1",
-					"IsBase64Decode": true
-				}
-			}
-      	}
+{
+    "triggerEnable":true,
+    "asyncInvocationType":true,
+    "eventSourceConfig":{
+        "eventSourceType":"MNS",
+        "eventSourceParameters":{
+            "sourceMNSParameters":{
+                "QueueName":"test-1",
+                "IsBase64Decode":true
+            }
+        }
+    },
+    "eventRuleFilterPattern":"{}",
+    "eventSinkConfig":{
+        "deliveryOption":{
+            "mode":"event-driven",
+            "eventSchema":"CloudEvents"
+        }
+    },
+    "runOptions":{
+        "retryStrategy":{
+            "PushRetryStrategy":"BACKOFF_RETRY"
+        },
+        "errorsTolerance":"ALL",
+        "mode":"event-driven"
     }
+}
 `
 
 func testAlicloudFCTriggerCdnEvents(trigger, role, policy, name string) string {
@@ -857,7 +916,7 @@ data "alicloud_account" "default" {
 }
 
 resource "alicloud_cdn_domain_new" "default" {
-  domain_name = "${var.name}.xiaozhu.com"
+  domain_name = "${var.name}.alicloud-provider.cn"
   cdn_type    = "web"
   scope       = "overseas"
   sources {
@@ -892,7 +951,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 resource "alicloud_ram_role" "default" {
@@ -941,7 +1000,7 @@ data "alicloud_account" "default" {
 }
 
 resource "alicloud_cdn_domain_new" "default" {
-  domain_name = "${var.name}.xiaozhu.com"
+  domain_name = "${var.name}.alicloud-provider.cn"
   cdn_type    = "web"
   scope       = "overseas"
   sources {
@@ -976,7 +1035,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 resource "alicloud_ram_role" "default" {
@@ -1020,6 +1079,10 @@ variable "name" {
   default = "%v"
 }
 
+resource "alicloud_event_bridge_service_linked_role" "service_linked_role" {
+  product_name = "AliyunServiceRoleForEventBridgeSendToFC"
+}
+
 data "alicloud_regions" "default" {
   current = true
 }
@@ -1052,7 +1115,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 
@@ -1107,7 +1170,7 @@ resource "alicloud_fc_function" "default" {
   oss_bucket = "${alicloud_oss_bucket.default.id}"
   oss_key = "${alicloud_oss_bucket_object.default.key}"
   memory_size = 512
-  runtime = "python2.7"
+  runtime = "python3.9"
   handler = "hello.handler"
 }
 

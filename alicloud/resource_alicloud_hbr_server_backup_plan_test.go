@@ -51,22 +51,11 @@ func testSweepHbrServerBackupPlan(region string) error {
 	}
 
 	var hbrPlans []interface{}
-
-	conn, err := client.NewHbrClient()
-
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
-
 	for {
 		var response map[string]interface{}
-
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -123,7 +112,7 @@ func testSweepHbrServerBackupPlan(region string) error {
 		request := map[string]interface{}{
 			"PlanId": item["PlanId"],
 		}
-		_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		_, err = client.RpcPost("hbr", "2017-09-08", action, nil, request, false)
 		if err != nil {
 			log.Printf("[ERROR] Failed to delete HBR Ecs Server Backup Plan (%s): %s", item["PlanName"].(string), err)
 		}
@@ -166,6 +155,9 @@ func TestAccAlicloudHBRServerBackupPlan_basic0(t *testing.T) {
 					"schedule":                    "I|1602673264|PT2H",
 					"ecs_server_backup_plan_name": "tf-testAcc-hbr-backup-plan",
 					"retention":                   "1",
+					"cross_account_type":          "SELF_ACCOUNT",
+					"cross_account_user_id":       "${data.alicloud_account.default.id}",
+					"cross_account_role_name":     "${alicloud_ram_role.default.id}",
 					"detail": []map[string]interface{}{
 						{
 							"app_consistent": "false",
@@ -178,6 +170,9 @@ func TestAccAlicloudHBRServerBackupPlan_basic0(t *testing.T) {
 						"schedule":                    "I|1602673264|PT2H",
 						"ecs_server_backup_plan_name": "tf-testAcc-hbr-backup-plan",
 						"retention":                   "1",
+						"cross_account_type":          "SELF_ACCOUNT",
+						"cross_account_user_id":       CHECKSET,
+						"cross_account_role_name":     CHECKSET,
 						"detail.#":                    "1",
 					}),
 				),
@@ -563,14 +558,37 @@ var AlicloudHBRServerBackupPlanMap0 = map[string]string{
 
 func AlicloudHBRServerBackupPlanBasicDependence0(name string) string {
 	return fmt.Sprintf(` 
-variable "name" {
-  default = "%s"
-}
+	variable "name" {
+  		default = "%s"
+	}
 
-data "alicloud_instances" "default" {
-  name_regex = "no-deleteing-hbr-ecs-server-backup-plan"
-  status = "Running"
-}
+	data "alicloud_account" "default" {
+	}
+
+	data "alicloud_instances" "default" {
+  		status = "Running"
+	}
+
+	resource "alicloud_ram_role" "default" {
+  		name     = var.name
+  		document = <<EOF
+		{
+			"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": [
+						"crossbackup.hbr.aliyuncs.com"
+					]
+				}
+			}
+			],
+  			"Version": "1"
+		}
+  		EOF
+  		force    = true
+	}
 `, name)
 }
 

@@ -5,8 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -73,13 +71,7 @@ func resourceAlicloudVpnPbrRouteEntryCreate(d *schema.ResourceData, meta interfa
 	var response map[string]interface{}
 	action := "CreateVpnPbrRouteEntry"
 	request := make(map[string]interface{})
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
-
-	request["RegionId"] = client.RegionId
-
+	var err error
 	request["RegionId"] = client.RegionId
 	request["VpnGatewayId"] = d.Get("vpn_gateway_id")
 	request["RouteDest"] = d.Get("route_dest")
@@ -88,14 +80,12 @@ func resourceAlicloudVpnPbrRouteEntryCreate(d *schema.ResourceData, meta interfa
 	request["PublishVpc"] = d.Get("publish_vpc")
 	request["RouteSource"] = d.Get("route_source")
 
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
 		request["ClientToken"] = buildClientToken(action)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 		if err != nil {
-			if IsExpectedErrors(err, []string{"VpnGateway.Configuring"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"VpnGateway.Configuring", "TaskConflict", "Appliance.Configuring", "VpnTask.CONFLICT", "VpnConnection.Configuring"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -149,10 +139,7 @@ func resourceAlicloudVpnPbrRouteEntryUpdate(d *schema.ResourceData, meta interfa
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
 	d.Partial(true)
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	parts, err := ParseResourceId(d.Id(), 4)
 	if err != nil {
 		return WrapError(err)
@@ -177,14 +164,12 @@ func resourceAlicloudVpnPbrRouteEntryUpdate(d *schema.ResourceData, meta interfa
 	if update {
 		request["RouteType"] = "pbr"
 		action := "PublishVpnRouteEntry"
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		request["ClientToken"] = buildClientToken(action)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
-				if IsExpectedErrors(err, []string{"VpnGateway.Configuring"}) || NeedRetry(err) {
+				if IsExpectedErrors(err, []string{"VpnGateway.Configuring", "TaskConflict", "Appliance.Configuring", "VpnTask.CONFLICT", "VpnConnection.Configuring"}) || NeedRetry(err) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -216,14 +201,12 @@ func resourceAlicloudVpnPbrRouteEntryUpdate(d *schema.ResourceData, meta interfa
 
 	if update {
 		action := "ModifyVpnPbrRouteEntryWeight"
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		request["ClientToken"] = buildClientToken(action)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, weightRequest, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, weightRequest, true)
 			if err != nil {
-				if IsExpectedErrors(err, []string{"VpnGateway.Configuring"}) || NeedRetry(err) {
+				if IsExpectedErrors(err, []string{"VpnGateway.Configuring", "TaskConflict", "Appliance.Configuring", "VpnTask.CONFLICT", "VpnConnection.Configuring"}) || NeedRetry(err) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -246,10 +229,7 @@ func resourceAlicloudVpnPbrRouteEntryDelete(d *schema.ResourceData, meta interfa
 	client := meta.(*connectivity.AliyunClient)
 	vpcService := VpcService{client}
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	parts, err := ParseResourceId(d.Id(), 4)
 	if err != nil {
 		return WrapError(err)
@@ -268,14 +248,12 @@ func resourceAlicloudVpnPbrRouteEntryDelete(d *schema.ResourceData, meta interfa
 	}
 
 	action := "DeleteVpnPbrRouteEntry"
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	request["ClientToken"] = buildClientToken(action)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 		if err != nil {
-			if IsExpectedErrors(err, []string{"VpnGateway.Configuring"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"VpnGateway.Configuring", "TaskConflict", "Appliance.Configuring", "VpnTask.CONFLICT", "VpnConnection.Configuring"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}

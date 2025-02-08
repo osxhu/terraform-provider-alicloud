@@ -7,39 +7,47 @@ description: |-
   Provides a Alicloud HBR Oss Backup Plan resource.
 ---
 
-# alicloud\_hbr\_oss\_backup\_plan
+# alicloud_hbr_oss_backup_plan
 
 Provides a HBR Oss Backup Plan resource.
 
 For information about HBR Oss Backup Plan and how to use it, see [What is Oss Backup Plan](https://www.alibabacloud.com/help/doc-detail/130040.htm).
 
--> **NOTE:** Available in v1.131.0+.
+-> **NOTE:** Available since v1.131.0+.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_hbr_oss_backup_plan&exampleId=ab9773de-48f4-54d7-b158-fd4be518aaa3d846fd7a&activeTab=example&spm=docs.r.hbr_oss_backup_plan.0.ab9773de48&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-variable "name" {
-  default = "tf-test112358"
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
 }
 
 resource "alicloud_hbr_vault" "default" {
-  vault_name = var.name
+  vault_name = "terraform-example-${random_integer.default.result}"
 }
 
 resource "alicloud_oss_bucket" "default" {
-  bucket = var.name
+  bucket = "terraform-example-${random_integer.default.result}"
 }
 
 resource "alicloud_hbr_oss_backup_plan" "default" {
-  oss_backup_plan_name = var.name
-  prefix               = "/"
-  bucket               = alicloud_oss_bucket.default.bucket
-  vault_id             = alicloud_hbr_vault.default.id
-  schedule             = "I|1602673264|PT2H"
-  backup_type          = "COMPLETE"
-  retention            = "2"
+  oss_backup_plan_name = "terraform-example"
+  # the prefix of object you want to back up
+  prefix      = "/example"
+  bucket      = alicloud_oss_bucket.default.bucket
+  vault_id    = alicloud_hbr_vault.default.id
+  schedule    = "I|1602673264|PT2H"
+  backup_type = "COMPLETE"
+  retention   = "2"
 }
 ```
 

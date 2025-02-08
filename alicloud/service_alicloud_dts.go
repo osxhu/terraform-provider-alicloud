@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -16,21 +15,16 @@ type DtsService struct {
 }
 
 func (s *DtsService) DescribeDtsJobMonitorRule(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeJobMonitorRule"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"DtsJobId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -56,21 +50,16 @@ func (s *DtsService) DescribeDtsJobMonitorRule(id string) (object map[string]int
 }
 
 func (s *DtsService) DescribeDtsSubscriptionJob(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobDetail"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"DtsJobId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -122,21 +111,16 @@ func (s *DtsService) DtsSubscriptionJobStateRefreshFunc(id string, failStates []
 }
 
 func (s *DtsService) DescribeDtsSynchronizationInstance(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobDetail"
 	request := map[string]interface{}{
 		"RegionId":      s.client.RegionId,
 		"DtsInstanceID": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -165,10 +149,7 @@ func (s *DtsService) DescribeDtsSynchronizationInstance(id string) (object map[s
 }
 
 func (s *DtsService) ListTagResources(id string, resourceType string) (object interface{}, err error) {
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListTagResources"
 	request := map[string]interface{}{
 		"RegionId":     s.client.RegionId,
@@ -181,7 +162,7 @@ func (s *DtsService) ListTagResources(id string, resourceType string) (object in
 	for {
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err := client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{Throttling}) {
 					wait()
@@ -216,10 +197,7 @@ func (s *DtsService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 	if d.HasChange("tags") {
 		added, removed := parsingTags(d)
-		conn, err := s.client.NewDtsClient()
-		if err != nil {
-			return WrapError(err)
-		}
+		client := s.client
 
 		removedTagKeys := make([]string, 0)
 		for _, v := range removed {
@@ -232,14 +210,14 @@ func (s *DtsService) SetResourceTags(d *schema.ResourceData, resourceType string
 			request := map[string]interface{}{
 				"RegionId":     s.client.RegionId,
 				"ResourceType": resourceType,
-				"ResourceId.1": d.Get("dts_instance_id"),
+				"ResourceId.1": d.Id(),
 			}
 			for i, key := range removedTagKeys {
 				request[fmt.Sprintf("TagKey.%d", i+1)] = key
 			}
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -260,7 +238,7 @@ func (s *DtsService) SetResourceTags(d *schema.ResourceData, resourceType string
 			request := map[string]interface{}{
 				"RegionId":     s.client.RegionId,
 				"ResourceType": resourceType,
-				"ResourceId.1": d.Get("dts_instance_id"),
+				"ResourceId.1": d.Id(),
 			}
 			count := 1
 			for key, value := range added {
@@ -271,7 +249,7 @@ func (s *DtsService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -293,21 +271,16 @@ func (s *DtsService) SetResourceTags(d *schema.ResourceData, resourceType string
 }
 
 func (s *DtsService) DescribeDtsSynchronizationJob(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobDetail"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"DtsJobId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -348,21 +321,16 @@ func (s *DtsService) DescribeDtsSynchronizationJob(id string) (object map[string
 }
 
 func (s *DtsService) DescribeDtsJobDetail(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobDetail"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"DtsJobId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -411,11 +379,8 @@ func (s *DtsService) DtsSynchronizationJobStateRefreshFunc(id string, failStates
 }
 
 func (s *DtsService) DescribeDtsConsumerChannel(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeConsumerChannel"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -430,11 +395,9 @@ func (s *DtsService) DescribeDtsConsumerChannel(id string) (object map[string]in
 	}
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -476,11 +439,8 @@ func (s *DtsService) DescribeDtsConsumerChannel(id string) (object map[string]in
 }
 
 func (s *DtsService) DescribeDtsMigrationJob(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobs"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
@@ -491,11 +451,9 @@ func (s *DtsService) DescribeDtsMigrationJob(id string) (object map[string]inter
 	request["PageNumber"] = 1
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -557,21 +515,16 @@ func (s *DtsService) DtsMigrationJobStateRefreshFunc(id string, failStates []str
 }
 
 func (s *DtsService) DescribeDtsMigrationInstance(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobDetail"
 	request := map[string]interface{}{
 		"RegionId":      s.client.RegionId,
 		"DtsInstanceID": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -600,11 +553,8 @@ func (s *DtsService) DescribeDtsMigrationInstance(id string) (object map[string]
 }
 
 func (s *DtsService) DescribeDtsSyncJob(id string) (object map[string]interface{}, err error) {
+	client := s.client
 	var response map[string]interface{}
-	conn, err := s.client.NewDtsClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
 	action := "DescribeDtsJobs"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
@@ -615,11 +565,9 @@ func (s *DtsService) DescribeDtsSyncJob(id string) (object map[string]interface{
 	request["PageNumber"] = 1
 	idExist := false
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -678,4 +626,40 @@ func (s *DtsService) DtsSyncJobStateRefreshFunc(id string, failStates []string) 
 		}
 		return object, fmt.Sprint(object["Status"]), nil
 	}
+}
+func (s *DtsService) DescribeDtsInstance(id string) (object map[string]interface{}, err error) {
+	client := s.client
+
+	request := map[string]interface{}{
+		"DtsInstanceId": id,
+		"RegionId":      s.client.RegionId,
+	}
+
+	var response map[string]interface{}
+	action := "DescribeDtsInstanceDetail"
+	wait := incrementalWait(3*time.Second, 3*time.Second)
+	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
+		resp, err := client.RpcPost("Dts", "2020-01-01", action, nil, request, true)
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		response = resp
+		addDebug(action, response, request)
+		return nil
+	})
+	if err != nil {
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+	v, err := jsonpath.Get("$.DtsInstanceStatus", response)
+	if err != nil {
+		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.DtsInstanceStatus", response)
+	}
+	if status, ok := v.(map[string]interface{})["Status"]; ok && status == "finished" {
+		return object, WrapErrorf(Error(GetNotFoundMessage("DTS", id)), NotFoundWithResponse, response)
+	}
+	return v.(map[string]interface{}), nil
 }

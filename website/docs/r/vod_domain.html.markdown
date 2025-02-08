@@ -7,33 +7,47 @@ description: |-
   Provides a Alicloud VOD Domain resource.
 ---
 
-# alicloud\_vod\_domain
+# alicloud_vod_domain
 
 Provides a VOD Domain resource.
 
 For information about VOD Domain and how to use it, see [What is Domain](https://www.alibabacloud.com/help/product/29932.html).
 
--> **NOTE:** Available in v1.136.0+.
+-> **NOTE:** Available since v1.136.0+.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_vod_domain&exampleId=181ae1f4-55e8-2611-f439-041abeec270ce6d3e821&activeTab=example&spm=docs.r.vod_domain.0.181ae1f455&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+provider "alicloud" {
+  region = "cn-shanghai"
+}
+
+resource "random_integer" "default" {
+  min = 10000
+  max = 99999
+}
+
 resource "alicloud_vod_domain" "default" {
-  domain_name = "your_domain_name"
+  domain_name = "example-${random_integer.default.result}.com"
   scope       = "domestic"
   sources {
     source_type    = "domain"
-    source_content = "your_source_content"
-    source_port    = "80"
+    source_content = "outin-c7405446108111ec9a7100163e0eb78b.oss-cn-beijing.aliyuncs.com"
+    source_port    = "443"
   }
   tags = {
-    key1 = "value1"
-    key2 = "value2"
+    Created = "terraform"
+    For     = "example"
   }
 }
-
 ```
 
 ## Argument Reference

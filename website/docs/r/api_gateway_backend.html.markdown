@@ -7,21 +7,27 @@ description: |-
   Provides a Alicloud Api Gateway Backend resource.
 ---
 
-# alicloud\_api\_gateway\_backend
+# alicloud_api_gateway_backend
 
 Provides a Api Gateway Backend resource.
 
-For information about Api Gateway Backend and how to use it, see [What is Backend](https://www.alibabacloud.com/help/zh/api-gateway/latest/api-doc-cloudapi-2016-07-14-api-doc-createbackend).
+For information about Api Gateway Backend and how to use it, see [What is Backend](https://www.alibabacloud.com/help/en/api-gateway/developer-reference/api-cloudapi-2016-07-14-createbackend).
 
--> **NOTE:** Available in v1.181.0+.
+-> **NOTE:** Available since v1.181.0.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_api_gateway_backend&exampleId=7069f394-4f0b-9a56-8915-e0d9ff969442eb4d7f9d&activeTab=example&spm=docs.r.api_gateway_backend.0.7069f3944f&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-variable "name1" {
-  default = "tf-testAccBackend"
+variable "name" {
+  default = "tf_example"
 }
 
 resource "alicloud_api_gateway_backend" "default" {

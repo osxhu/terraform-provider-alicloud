@@ -36,7 +36,7 @@ func init() {
 func testSweepGaBandwidthPackage(region string) error {
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return WrapErrorf(err, "error getting Alicloud client.")
+		return WrapErrorf(err, "error getting AliCloud client.")
 	}
 
 	client := rawClient.(*connectivity.AliyunClient)
@@ -51,15 +51,9 @@ func testSweepGaBandwidthPackage(region string) error {
 	request["PageSize"] = PageSizeLarge
 	request["PageNumber"] = 1
 
-	conn, err := client.NewGaplusClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	for {
 		action := "ListBandwidthPackages"
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-20"), StringPointer("AK"), nil, request, &runtime)
+		response, err := client.RpcPost("Ga", "2019-11-20", action, nil, request, true)
 		if err != nil {
 			log.Printf("[ERROR] %s got an error: %v", action, err)
 			break
@@ -96,7 +90,7 @@ func testSweepGaBandwidthPackage(region string) error {
 			request["ClientToken"] = buildClientToken("DeleteBandwidthPackage")
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err = client.RpcPost("Ga", "2019-11-20", action, nil, request, true)
 				if err != nil {
 					if IsExpectedErrors(err, []string{"StateError.BandwidthPackage", "StateError.Accelerator"}) || NeedRetry(err) {
 						wait()
@@ -119,55 +113,42 @@ func testSweepGaBandwidthPackage(region string) error {
 	return nil
 }
 
-func TestAccAlicloudGaBandwidthPackage_basic(t *testing.T) {
+func TestAccAliCloudGaBandwidthPackage_basic0(t *testing.T) {
 	var v map[string]interface{}
 	checkoutSupportedRegions(t, true, connectivity.GaSupportRegions)
 	resourceId := "alicloud_ga_bandwidth_package.default"
-	ra := resourceAttrInit(resourceId, AlicloudGaBandwidthPackageMap)
+	ra := resourceAttrInit(resourceId, AliCloudGaBandwidthPackageMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &GaService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeGaBandwidthPackage")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
-	name := fmt.Sprintf("tf-testAcc%sAlicloudGaAccelerator%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudGaBandwidthPackageBasicDependence)
+	name := fmt.Sprintf("tf-testAcc%sAliCloudGaBandwidthPackage%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudGaBandwidthPackageBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
-		CheckDestroy:  rac.checkResourceDestroy(),
+		CheckDestroy:  nil,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"bandwidth":      `100`,
+					"bandwidth":      "100",
 					"type":           "Basic",
 					"bandwidth_type": "Basic",
-					"billing_type":   "PayBy95",
-					"payment_type":   "PayAsYouGo",
-					"ratio":          "30",
+					"auto_pay":       "true",
+					"duration":       "1",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"bandwidth":      "100",
 						"type":           "Basic",
 						"bandwidth_type": "Basic",
-						"billing_type":   "PayBy95",
-						"payment_type":   "PayAsYouGo",
-						"ratio":          "30",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"bandwidth_package_name": name + "update",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"bandwidth_package_name": name + "update",
+						"auto_pay":       "true",
+						"duration":       "1",
 					}),
 				),
 			},
@@ -193,25 +174,66 @@ func TestAccAlicloudGaBandwidthPackage_basic(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"description": "bandwidthpackageDescription",
+					"renewal_status": "AutoRenewal",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"description": "bandwidthpackageDescription",
+						"renewal_status": "AutoRenewal",
 					}),
 				),
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"bandwidth_package_name": "${var.name}",
-					"description":            "bandwidthpackage",
-					"bandwidth":              "50",
+					"auto_renew_duration": "1",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"auto_renew_duration": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_package_name": name,
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"bandwidth_package_name": name,
-						"description":            "bandwidthpackage",
-						"bandwidth":              "50",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "BandwidthPackage",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "BandwidthPackage",
 					}),
 				),
 			},
@@ -219,25 +241,272 @@ func TestAccAlicloudGaBandwidthPackage_basic(t *testing.T) {
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"auto_use_coupon", "auto_pay", "duration"},
+				ImportStateVerifyIgnore: []string{"auto_pay", "duration", "auto_use_coupon", "promotion_option_no"},
 			},
 		},
 	})
 }
 
-var AlicloudGaBandwidthPackageMap = map[string]string{
-	"status": CHECKSET,
+func TestAccAliCloudGaBandwidthPackage_basic0_twin(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.GaSupportRegions)
+	resourceId := "alicloud_ga_bandwidth_package.default"
+	ra := resourceAttrInit(resourceId, AliCloudGaBandwidthPackageMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &GaService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeGaBandwidthPackage")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testAcc%sAliCloudGaBandwidthPackage%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudGaBandwidthPackageBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  nil,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth":              "100",
+					"type":                   "Basic",
+					"bandwidth_type":         "Basic",
+					"payment_type":           "Subscription",
+					"auto_pay":               "true",
+					"duration":               "1",
+					"auto_use_coupon":        "false",
+					"renewal_status":         "AutoRenewal",
+					"auto_renew_duration":    "1",
+					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+					"bandwidth_package_name": name,
+					"description":            name,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "BandwidthPackage",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth":              "100",
+						"type":                   "Basic",
+						"bandwidth_type":         "Basic",
+						"payment_type":           "Subscription",
+						"renewal_status":         "AutoRenewal",
+						"auto_renew_duration":    "1",
+						"resource_group_id":      CHECKSET,
+						"bandwidth_package_name": name,
+						"description":            name,
+						"tags.%":                 "2",
+						"tags.Created":           "TF",
+						"tags.For":               "BandwidthPackage",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"auto_pay", "duration", "auto_use_coupon", "promotion_option_no"},
+			},
+		},
+	})
 }
 
-func AlicloudGaBandwidthPackageBasicDependence(name string) string {
+func TestAccAliCloudGaBandwidthPackage_basic1(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.GaSupportRegions)
+	resourceId := "alicloud_ga_bandwidth_package.default"
+	ra := resourceAttrInit(resourceId, AliCloudGaBandwidthPackageMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &GaService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeGaBandwidthPackage")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testAcc%sAliCloudGaBandwidthPackage%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudGaBandwidthPackageBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth":      "100",
+					"type":           "Basic",
+					"bandwidth_type": "Basic",
+					"payment_type":   "PayAsYouGo",
+					"billing_type":   "PayBy95",
+					"ratio":          "30",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth":      "100",
+						"type":           "Basic",
+						"bandwidth_type": "Basic",
+						"payment_type":   "PayAsYouGo",
+						"billing_type":   "PayBy95",
+						"ratio":          "30",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth": "20",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth": "20",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_type": "Enhanced",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_type": "Enhanced",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_package_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_package_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "BandwidthPackage",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "BandwidthPackage",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"auto_pay", "duration", "auto_use_coupon", "promotion_option_no"},
+			},
+		},
+	})
+}
+
+func TestAccAliCloudGaBandwidthPackage_basic1_twin(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.GaSupportRegions)
+	resourceId := "alicloud_ga_bandwidth_package.default"
+	ra := resourceAttrInit(resourceId, AliCloudGaBandwidthPackageMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &GaService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeGaBandwidthPackage")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testAcc%sAliCloudGaBandwidthPackage%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudGaBandwidthPackageBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth":              "100",
+					"type":                   "Basic",
+					"bandwidth_type":         "Basic",
+					"payment_type":           "PayAsYouGo",
+					"billing_type":           "PayBy95",
+					"ratio":                  "30",
+					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+					"bandwidth_package_name": name,
+					"description":            name,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "BandwidthPackage",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth":              "100",
+						"type":                   "Basic",
+						"bandwidth_type":         "Basic",
+						"payment_type":           "PayAsYouGo",
+						"billing_type":           "PayBy95",
+						"ratio":                  "30",
+						"resource_group_id":      CHECKSET,
+						"bandwidth_package_name": name,
+						"description":            name,
+						"tags.%":                 "2",
+						"tags.Created":           "TF",
+						"tags.For":               "BandwidthPackage",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"auto_pay", "duration", "auto_use_coupon", "promotion_option_no"},
+			},
+		},
+	})
+}
+
+var AliCloudGaBandwidthPackageMap0 = map[string]string{
+	"resource_group_id": CHECKSET,
+	"status":            CHECKSET,
+}
+
+func AliCloudGaBandwidthPackageBasicDependence0(name string) string {
 	return fmt.Sprintf(`
-variable "name" {
-	default = "%s"
-}
-`, name)
+	data "alicloud_resource_manager_resource_groups" "default" {
+	}
+`)
 }
 
-func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
+func TestUnitAliCloudGaBandwidthPackage(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_ga_bandwidth_package"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_ga_bandwidth_package"].Schema).Data(nil, nil)
@@ -321,7 +590,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudGaBandwidthPackageCreate(dInit, rawClient)
+	err = resourceAliCloudGaBandwidthPackageCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff := map[string]interface{}{
@@ -347,7 +616,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudGaBandwidthPackageCreate(dInit, rawClient)
+		err := resourceAliCloudGaBandwidthPackageCreate(dInit, rawClient)
 		switch errorCode {
 		case "NonRetryableError":
 			assert.NotNil(t, err)
@@ -372,7 +641,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudGaBandwidthPackageUpdate(dExisted, rawClient)
+	err = resourceAliCloudGaBandwidthPackageUpdate(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	// UpdateBandwidthPackagaAutoRenewAttribute
@@ -408,7 +677,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudGaBandwidthPackageUpdate(dExisted, rawClient)
+		err := resourceAliCloudGaBandwidthPackageUpdate(dExisted, rawClient)
 		switch errorCode {
 		case "NonRetryableError":
 			assert.NotNil(t, err)
@@ -461,7 +730,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudGaBandwidthPackageUpdate(dExisted, rawClient)
+		err := resourceAliCloudGaBandwidthPackageUpdate(dExisted, rawClient)
 		switch errorCode {
 		case "NonRetryableError":
 			assert.NotNil(t, err)
@@ -499,7 +768,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudGaBandwidthPackageRead(dExisted, rawClient)
+		err := resourceAliCloudGaBandwidthPackageRead(dExisted, rawClient)
 		switch errorCode {
 		case "NonRetryableError":
 			assert.NotNil(t, err)
@@ -516,7 +785,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudGaBandwidthPackageDelete(dExisted, rawClient)
+	err = resourceAliCloudGaBandwidthPackageDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	errorCodes = []string{"NonRetryableError", "Throttling", "nil"}
@@ -541,7 +810,7 @@ func TestUnitAlicloudGaBandwidthPackage(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudGaBandwidthPackageDelete(dExisted, rawClient)
+		err := resourceAliCloudGaBandwidthPackageDelete(dExisted, rawClient)
 		switch errorCode {
 		case "NonRetryableError":
 			assert.NotNil(t, err)

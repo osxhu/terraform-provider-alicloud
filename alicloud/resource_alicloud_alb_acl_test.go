@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
@@ -40,16 +38,10 @@ func testSweepAlbAcl(region string) error {
 	request["MaxResults"] = PageSizeXLarge
 
 	var response map[string]interface{}
-	conn, err := client.NewAlbClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -78,21 +70,23 @@ func testSweepAlbAcl(region string) error {
 				continue
 			}
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(item["AclName"].(string)), strings.ToLower(prefix)) {
-					skip = false
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(item["AclName"].(string)), strings.ToLower(prefix)) {
+						skip = false
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping Alb Acl: %s", item["AclName"].(string))
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping Alb Acl: %s", item["AclName"].(string))
+					continue
+				}
 			}
 			action := "DeleteAcl"
 			request := map[string]interface{}{
 				"AclId": item["AclId"],
 			}
 			request["ClientToken"] = buildClientToken("DeleteAcl")
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Alb Acl (%s): %s", item["AclId"].(string), err)
 			}
@@ -107,7 +101,7 @@ func testSweepAlbAcl(region string) error {
 	return nil
 }
 
-func TestAccAlicloudALBAcl_basic0(t *testing.T) {
+func TestAccAliCloudALBAcl_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_alb_acl.default"
 	ra := resourceAttrInit(resourceId, AlicloudALBAclMap0)
@@ -128,6 +122,12 @@ func TestAccAlicloudALBAcl_basic0(t *testing.T) {
 		Providers:     testAccProviders,
 		CheckDestroy:  rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{}),
+				),
+			},
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"acl_name": "${var.name}",
@@ -378,7 +378,7 @@ func TestAccAlicloudALBAcl_basic0(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudALBAcl_basic1(t *testing.T) {
+func TestAccAliCloudALBAcl_basic1(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_alb_acl.default"
 	ra := resourceAttrInit(resourceId, AlicloudALBAclMap0)

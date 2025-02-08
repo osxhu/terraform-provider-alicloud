@@ -52,16 +52,10 @@ func testSweepPrivateZoneEndpoint(region string) error {
 	request["PageNumber"] = 1
 
 	var response map[string]interface{}
-	conn, err := client.NewPvtzClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -104,7 +98,7 @@ func testSweepPrivateZoneEndpoint(region string) error {
 				"EndpointId": item["Id"],
 			}
 			request["ClientToken"] = buildClientToken(action)
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+			_, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete PrivateZone Endpoint (%s): %s", item["Id"].(string), err)
 			}
@@ -428,7 +422,7 @@ func TestUnitAlicloudPvtzEndpoint(t *testing.T) {
 				diff.SetAttribute(fmt.Sprintf("%s.#", key), &terraform.ResourceAttrDiff{Old: "1", New: "1"})
 				for _, ipConfig := range d.Get(key).(*schema.Set).List() {
 					ipConfigArg := ipConfig.(map[string]interface{})
-					for field, _ := range p["alicloud_pvtz_endpoint"].Schema[key].Elem.(*schema.Resource).Schema {
+					for field := range p["alicloud_pvtz_endpoint"].Schema[key].Elem.(*schema.Resource).Schema {
 						diff.SetAttribute(fmt.Sprintf("%s.%d.%s", key, rand, field), &terraform.ResourceAttrDiff{Old: ipConfigArg[field].(string), New: ipConfigArg[field].(string) + "_update"})
 					}
 				}
@@ -471,7 +465,7 @@ func TestUnitAlicloudPvtzEndpoint(t *testing.T) {
 				diff.SetAttribute(fmt.Sprintf("%s.#", key), &terraform.ResourceAttrDiff{Old: "1", New: "1"})
 				for _, ipConfig := range d.Get(key).(*schema.Set).List() {
 					ipConfigArg := ipConfig.(map[string]interface{})
-					for field, _ := range p["alicloud_pvtz_endpoint"].Schema[key].Elem.(*schema.Resource).Schema {
+					for field := range p["alicloud_pvtz_endpoint"].Schema[key].Elem.(*schema.Resource).Schema {
 						diff.SetAttribute(fmt.Sprintf("%s.%d.%s", key, rand, field), &terraform.ResourceAttrDiff{Old: ipConfigArg[field].(string), New: ipConfigArg[field].(string) + "_update"})
 					}
 				}

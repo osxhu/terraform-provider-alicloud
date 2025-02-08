@@ -1,5 +1,5 @@
 ---
-subcategory: "VPC"
+subcategory: "Express Connect"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_router_interface_connection"
 sidebar_current: "docs-alicloud-resource-router-interface-connection"
@@ -11,6 +11,8 @@ description: |-
 
 Provides a VPC router interface connection resource to connect two router interfaces which are in two different VPCs.
 After that, all of the two router interfaces will be active.
+
+-> **DEPRECATED:**  This resource  has been deprecated from version `1.199.0`. Please use new resource [alicloud_express_connect_router_interface](https://www.terraform.io/docs/providers/alicloud/r/alicloud_express_connect_router_interface).
 
 -> **NOTE:** At present, Router interface does not support changing opposite router interface, the connection delete action is only deactivating it to inactive, not modifying the connection to empty.
 

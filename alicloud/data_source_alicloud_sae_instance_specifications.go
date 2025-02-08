@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -83,15 +82,10 @@ func dataSourceAlicloudSaeInstanceSpecificationsRead(d *schema.ResourceData, met
 		}
 	}
 	var response map[string]interface{}
-	conn, err := client.NewServerlessClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var err error
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer("2019-05-06"), nil, StringPointer("GET"), StringPointer("AK"), StringPointer(action), request, nil, nil, &util.RuntimeOptions{})
+		response, err = client.RoaGet("sae", "2019-05-06", action, request, nil, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -105,12 +99,9 @@ func dataSourceAlicloudSaeInstanceSpecificationsRead(d *schema.ResourceData, met
 	if err != nil {
 		return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_sae_instance_specifications", action, AlibabaCloudSdkGoERROR)
 	}
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
-	}
-	resp, err := jsonpath.Get("$.body.Data", response)
+	resp, err := jsonpath.Get("$.Data", response)
 	if err != nil {
-		return WrapErrorf(err, FailedGetAttributeMsg, action, "$.body.Data", response)
+		return WrapErrorf(err, FailedGetAttributeMsg, action, "$.Data", response)
 	}
 	result, _ := resp.([]interface{})
 	for _, v := range result {

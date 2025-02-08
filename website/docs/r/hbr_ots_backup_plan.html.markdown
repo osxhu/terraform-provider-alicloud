@@ -19,29 +19,36 @@ For information about HBR Ots Backup Plan and how to use it, see [What is Ots Ba
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_hbr_ots_backup_plan&exampleId=2b831313-da17-b985-d667-59a982ede92b2470625f&activeTab=example&spm=docs.r.hbr_ots_backup_plan.0.2b831313da&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-variable "name" {
-  default = "testAcc"
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
 }
 
 resource "alicloud_hbr_vault" "default" {
-  vault_name = var.name
+  vault_name = "terraform-example-${random_integer.default.result}"
   vault_type = "OTS_BACKUP"
 }
 
-resource "alicloud_ots_instance" "foo" {
-  name        = var.name
-  description = var.name
+resource "alicloud_ots_instance" "default" {
+  name        = "Example-${random_integer.default.result}"
+  description = "terraform-example"
   accessed_by = "Any"
   tags = {
     Created = "TF"
-    For     = "acceptance test"
+    For     = "example"
   }
 }
 
-resource "alicloud_ots_table" "basic" {
-  instance_name = alicloud_ots_instance.foo.name
-  table_name    = var.name
+resource "alicloud_ots_table" "default" {
+  instance_name = alicloud_ots_instance.default.name
+  table_name    = "terraform_example"
   primary_key {
     name = "pk1"
     type = "Integer"
@@ -51,15 +58,47 @@ resource "alicloud_ots_table" "basic" {
   deviation_cell_version_in_sec = 1
 }
 
+resource "alicloud_ram_role" "default" {
+  name     = "hbrexamplerole"
+  document = <<EOF
+		{
+			"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": [
+						"crossbackup.hbr.aliyuncs.com"
+					]
+				}
+			}
+			],
+  			"Version": "1"
+		}
+  		EOF
+  force    = true
+}
+
+data "alicloud_account" "default" {}
 resource "alicloud_hbr_ots_backup_plan" "example" {
-  ots_backup_plan_name = var.name
-  vault_id             = alicloud_hbr_vault.default.id
-  backup_type          = "COMPLETE"
-  schedule             = "I|1602673264|PT2H"
-  retention            = "2"
-  instance_name        = alicloud_ots_instance.foo.name
+  ots_backup_plan_name    = "terraform-example-${random_integer.default.result}"
+  vault_id                = alicloud_hbr_vault.default.id
+  backup_type             = "COMPLETE"
+  retention               = "1"
+  instance_name           = alicloud_ots_instance.default.name
+  cross_account_type      = "SELF_ACCOUNT"
+  cross_account_user_id   = data.alicloud_account.default.id
+  cross_account_role_name = alicloud_ram_role.default.id
+
   ots_detail {
-    table_names = [alicloud_ots_table.basic.table_name]
+    table_names = [alicloud_ots_table.default.table_name]
+  }
+  rules {
+    schedule    = "I|1602673264|PT2H"
+    retention   = "1"
+    disabled    = "false"
+    rule_name   = "terraform-example"
+    backup_type = "COMPLETE"
   }
 }
 ```

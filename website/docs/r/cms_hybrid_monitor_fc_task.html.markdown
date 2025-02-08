@@ -7,23 +7,59 @@ description: |-
   Provides a Alicloud Cloud Monitor Service Hybrid Monitor Fc Task resource.
 ---
 
-# alicloud\_cms\_hybrid\_monitor\_fc\_task
+# alicloud_cms_hybrid_monitor_fc_task
 
 Provides a Cloud Monitor Service Hybrid Monitor Fc Task resource.
 
 For information about Cloud Monitor Service Hybrid Monitor Fc Task and how to use it, see [What is Hybrid Monitor Fc Task](https://www.alibabacloud.com/help/en/cloudmonitor/latest/createhybridmonitortask).
 
--> **NOTE:** Available in v1.179.0+.
+-> **NOTE:** Available since v1.179.0.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_cms_hybrid_monitor_fc_task&exampleId=fb7fc871-13d2-fbb4-e412-324ef8574ad041c93806&activeTab=example&spm=docs.r.cms_hybrid_monitor_fc_task.0.fb7fc87113&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-resource "alicloud_cms_hybrid_monitor_fc_task" "example" {
-  namespace      = "example_value"
-  yarm_config    = "example_value"
-  target_user_id = "example_value"
+variable "name" {
+  default = "tf-example"
+}
+data "alicloud_account" "default" {}
+
+resource "alicloud_cms_namespace" "default" {
+  description   = var.name
+  namespace     = var.name
+  specification = "cms.s1.large"
+}
+
+resource "alicloud_cms_hybrid_monitor_fc_task" "default" {
+  namespace      = alicloud_cms_namespace.default.id
+  yarm_config    = <<EOF
+---
+products:
+- namespace: "acs_ecs_dashboard"
+  metric_info:
+  - metric_list:
+    - "CPUUtilization"
+    - "DiskReadBPS"
+    - "InternetOut"
+    - "IntranetOut"
+    - "cpu_idle"
+    - "cpu_system"
+    - "cpu_total"
+    - "diskusage_utilization"
+- namespace: "acs_rds_dashboard"
+  metric_info:
+  - metric_list:
+    - "MySQL_QPS"
+    - "MySQL_TPS"
+EOF
+  target_user_id = data.alicloud_account.default.id
 }
 ```
 
@@ -44,7 +80,7 @@ The following attributes are exported:
 * `id` - The resource ID of Hybrid Monitor Fc Task. The value formats as `<hybrid_monitor_fc_task_id>:<namespace>`.
 * `hybrid_monitor_fc_task_id` - The ID of the monitoring task.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

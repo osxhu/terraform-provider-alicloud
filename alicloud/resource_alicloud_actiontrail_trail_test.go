@@ -52,13 +52,7 @@ func testSweepActiontrailTrail(region string) error {
 	request := make(map[string]interface{})
 	var response map[string]interface{}
 	action := "DescribeTrails"
-	conn, err := client.NewActiontrailClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-07-06"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("Actiontrail", "2020-07-06", action, nil, request, true)
 	if err != nil {
 		return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_actiontrail_trails", action, AlibabaCloudSdkGoERROR)
 	}
@@ -71,21 +65,23 @@ func testSweepActiontrailTrail(region string) error {
 	for _, v := range result {
 		item := v.(map[string]interface{})
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(item["Name"].(string)), strings.ToLower(prefix)) {
-				skip = false
+		if sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(item["Name"].(string)), strings.ToLower(prefix)) {
+					skip = false
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping ActionTrail Trails: %s", item["Name"].(string))
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping ActionTrail Trails: %s", item["Name"].(string))
+				continue
+			}
 		}
 		sweeped = true
 		action = "DeleteTrail"
 		request := map[string]interface{}{
 			"Name": item["Name"],
 		}
-		_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-07-06"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		_, err = client.RpcPost("Actiontrail", "2020-07-06", action, nil, request, false)
 		if err != nil {
 			log.Printf("[ERROR] Failed to delete ActionTrail Trail (%s): %s", item["Name"].(string), err)
 		}
@@ -127,6 +123,9 @@ func TestAccAlicloudActiontrailTrail_basic(t *testing.T) {
 					"oss_write_role_arn": "${data.alicloud_ram_roles.default.roles.0.arn}",
 					"oss_bucket_name":    "${alicloud_oss_bucket.default.id}",
 					"status":             "Disable",
+					"depends_on": []string{
+						"alicloud_ram_role_policy_attachment.default",
+					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -219,7 +218,149 @@ func ActiontrailTrailBasicdependence(name string) string {
 	}
 
 	data "alicloud_ram_roles" "default" {
-		name_regex = "AliyunActionTrailDefaultRole"
+		name_regex = "${alicloud_ram_role.default.name}"
+	}
+
+	resource "alicloud_ram_role" "default" {
+	  name = "${var.name}-trigger"
+	  document = <<EOF
+    {
+        "Statement": [
+        {
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": {
+            "Service": [
+                "actiontrail.aliyuncs.com"
+            ]
+            }
+        }
+        ],
+        "Version": "1"
+    }
+	  EOF
+	  description = "this is a test"
+	  force = true
+	}
+	
+	resource "alicloud_ram_policy" "default" {
+	  name = "${var.name}-trigger"
+	  document = <<EOF
+		{
+			"Version": "1",
+			"Statement": [
+				{
+					"Action": [
+						"oss:ListObjects",
+						"oss:PutObject",
+						"oss:GetBucketInfo",
+						"oss:GetBucketLifecycle",
+						"oss:GetBucketLocation",
+						"kms:ListKeys",
+						"kms:Listalias",
+						"kms:ListAliasesByKeyId",
+						"kms:DescribeKey",
+						"kms:GenerateDataKey",
+						"kms:Decrypt"
+					],
+					"Resource": "*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"log:GetProject",
+						"log:ListJobs"
+					],
+					"Resource": "*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"log:PostLogStoreLogs",
+						"log:CreateLogstore",
+						"log:GetLogstore",
+						"log:CreateIndex",
+						"log:UpdateIndex",
+						"log:GetIndex",
+						"log:GetLogStoreLogs"
+					],
+					"Resource": [
+						"acs:log:*:*:project/*/logstore/actiontrail_*",
+						"acs:log:*:*:project/*/logstore/innertrail_*",
+						"acs:log:*:*:project/*/logstore/insights_*"
+					],
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"log:CreateDashboard",
+						"log:UpdateDashboard"
+					],
+					"Resource": "acs:log:*:*:project/*/dashboard/*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"log:CreateSavedSearch",
+						"log:UpdateSavedSearch"
+					],
+					"Resource": [
+						"acs:log:*:*:project/*/savedsearch/actiontrail_*",
+						"acs:log:*:*:project/*/savedsearch/innertrail_*",
+						"acs:log:*:*:project/*/savedsearch/insights_*"
+					],
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"mns:PublishMessage"
+					],
+					"Resource": "*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"resourcemanager:GetResourceDirectory",
+						"resourcemanager:ListAccounts",
+						"resourcemanager:GetResourceDirectoryAccount"
+					],
+					"Resource": "*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": [
+						"cms:DescribeMetricList",
+						"cms:QueryMetricList"
+					],
+					"Resource": "*",
+					"Effect": "Allow"
+				},
+				{
+					"Action": "ram:DeleteServiceLinkedRole",
+					"Resource": "*",
+					"Effect": "Allow",
+					"Condition": {
+						"StringEquals": {
+							"ram:ServiceName": "actiontrail.aliyuncs.com"
+						}
+					}
+				},
+				{
+					"Effect": "Allow",
+					"Action": "odps:updateUsersToAdmin",
+					"Resource": "acs:odps:*:*:projectUsers/*"
+				}
+			]
+		}
+	  EOF
+	  description = "this is a test"
+	  force = true
+	}
+	
+	resource "alicloud_ram_role_policy_attachment" "default" {
+	  role_name = "${alicloud_ram_role.default.name}"
+	  policy_name = "${alicloud_ram_policy.default.name}"
+	  policy_type = "Custom"
 	}
 
 	data "alicloud_ram_roles" "update" {

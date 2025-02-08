@@ -5,7 +5,6 @@ import (
 	"regexp"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
@@ -100,7 +99,6 @@ func dataSourceAlicloudFnfSchedulesRead(d *schema.ResourceData, meta interface{}
 	if v, ok := d.GetOk("limit"); ok {
 		request["Limit"] = v
 	}
-	request["MaxResults"] = PageSizeLarge
 	var objects []map[string]interface{}
 	var scheduleNameRegex *regexp.Regexp
 	if v, ok := d.GetOk("name_regex"); ok {
@@ -121,14 +119,9 @@ func dataSourceAlicloudFnfSchedulesRead(d *schema.ResourceData, meta interface{}
 		}
 	}
 	var response map[string]interface{}
-	conn, err := client.NewFnfClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-03-15"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("fnf", "2019-03-15", action, request, nil)
 		if err != nil {
 			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_fnf_schedules", action, AlibabaCloudSdkGoERROR)
 		}

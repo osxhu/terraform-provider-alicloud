@@ -37,7 +37,7 @@ The following arguments are supported:
 * `ids` - (Optional) Cluster IDs to filter.
 * `name_regex` - (Optional) A regex string to filter results by cluster name.
 * `output_file` - (Optional) File name where to save data source results (after running `terraform plan`).
-* `enabled_details` - (Optional) Boolean, false by default, only `id` and `name` are exported. Set to true if more details are needed, e.g.,  `deletion_protection`, `connections`. See full list in attributes.
+* `enable_details` - (Optional) Boolean, false by default, only `id` and `name` are exported. Set to true if more details are needed, e.g.,  `deletion_protection`, `connections`. See full list in attributes.
 * `kube_config_file_prefix` - (Optional, Available in 1.177.0+) The path prefix of kube config. You could store kube config in a specified directory by specifying this field, like `~/.kube/serverless`, then it will be named with `~/.kube/serverless-clusterID-kubeconfig`. From version 1.187.0+, kube_config will not export kube_config if this field is not set.
 
 ## Attributes Reference
@@ -49,7 +49,7 @@ The following attributes are exported in addition to the arguments listed above:
 * `clusters` - A list of matched Kubernetes clusters. Each element contains the following attributes:
   * `id` - The ID of the container cluster.
   * `name` - The name of the container cluster.
-  * `vswitch_id` - The ID of VSwitch where the current cluster is located.
+  * `vswitch_id` - The ID of vSwitch where the current cluster is located.
   * `vpc_id` - The ID of VPC where the current cluster is located.
   * `security_group_id` - The ID of security group where the current cluster  is located.
   * `nat_gateway_id` - The ID of nat gateway used to launch kubernetes cluster.

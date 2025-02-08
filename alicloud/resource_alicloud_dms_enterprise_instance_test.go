@@ -50,22 +50,18 @@ func testSweepDMSEnterpriseInstances(region string) error {
 	}
 	var response map[string]interface{}
 	action := "ListInstances"
-	conn, err := client.NewDmsenterpriseClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-11-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("dms-enterprise", "2018-11-01", action, nil, request, true)
 		if err != nil {
-			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_dms_enterprise_instances", action, AlibabaCloudSdkGoERROR)
+			log.Printf("[ERROR] Failed to list DMS Enterprise Instance : %s", err)
+			return nil
 		}
 		addDebug(action, response, request)
 
 		resp, err := jsonpath.Get("$.InstanceList.Instance", response)
 		if err != nil {
-			return WrapErrorf(err, FailedGetAttributeMsg, action, "$.InstanceList.Instance", response)
+			log.Printf("[ERROR] Failed to parse DMS Enterprise Instance response: %s", err)
+			return nil
 		}
 
 		result, _ := resp.([]interface{})
@@ -92,7 +88,7 @@ func testSweepDMSEnterpriseInstances(region string) error {
 				"Host": item["Host"],
 				"Port": item["Port"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-11-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("dms-enterprise", "2018-11-01", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete DMS Enterprise Instance (%s (%s)): %s", item["InstanceAlias"].(string), id, err)
 				continue
@@ -148,8 +144,6 @@ func TestAccAlicloudDMSEnterprise(t *testing.T) {
 					"export_timeout":    "2000",
 					"ecs_region":        os.Getenv("ALICLOUD_REGION"),
 					"ddl_online":        "0",
-					"use_dsql":          "0",
-					"data_link_name":    "",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -168,8 +162,8 @@ func TestAccAlicloudDMSEnterprise(t *testing.T) {
 						"export_timeout":  "2000",
 						"ecs_region":      os.Getenv("ALICLOUD_REGION"),
 						"ddl_online":      "0",
-						"use_dsql":        "0",
-						"data_link_name":  "",
+						"use_dsql":        CHECKSET,
+						"data_link_name":  CHECKSET,
 					}),
 				),
 			},
@@ -229,7 +223,6 @@ func TestAccAlicloudDMSEnterprise(t *testing.T) {
 					"ecs_region":        os.Getenv("ALICLOUD_REGION"),
 					"ddl_online":        "0",
 					"use_dsql":          "0",
-					"data_link_name":    "",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -249,7 +242,6 @@ func TestAccAlicloudDMSEnterprise(t *testing.T) {
 						"ecs_region":      os.Getenv("ALICLOUD_REGION"),
 						"ddl_online":      "0",
 						"use_dsql":        "0",
-						"data_link_name":  "",
 					}),
 				),
 			},

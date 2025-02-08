@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -238,15 +237,10 @@ func dataSourceAlicloudOpenSearchAppGroupsRead(d *schema.ResourceData, meta inte
 		}
 	}
 	var response map[string]interface{}
-	conn, err := client.NewOpensearchClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var err error
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer("2017-12-25"), nil, StringPointer("GET"), StringPointer("AK"), StringPointer(action), request, nil, nil, &util.RuntimeOptions{})
+		response, err = client.RoaGet("OpenSearch", "2017-12-25", action, request, nil, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -260,11 +254,6 @@ func dataSourceAlicloudOpenSearchAppGroupsRead(d *schema.ResourceData, meta inte
 	if err != nil {
 		return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_open_search_app_groups", action, AlibabaCloudSdkGoERROR)
 	}
-	if respBody, isExist := response["body"]; isExist {
-		response = respBody.(map[string]interface{})
-	} else {
-		return WrapError(fmt.Errorf("%s failed, response: %v", "GET "+action, response))
-	}
 	resp, err := jsonpath.Get("$.result", response)
 	if err != nil {
 		return WrapErrorf(err, FailedGetAttributeMsg, action, "$.result", response)
@@ -276,7 +265,7 @@ func dataSourceAlicloudOpenSearchAppGroupsRead(d *schema.ResourceData, meta inte
 			continue
 		}
 		if len(idsMap) > 0 {
-			if _, ok := idsMap[fmt.Sprint(item["name"])]; !ok {
+			if _, ok := idsMap[fmt.Sprint(item["instanceId"])]; !ok {
 				continue
 			}
 		}

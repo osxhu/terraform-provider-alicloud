@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -29,6 +28,7 @@ func resourceAlicloudRdsBackup() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				Computed: true,
+				ForceNew: true,
 			},
 			"backup_strategy": {
 				Type:     schema.TypeString,
@@ -38,6 +38,7 @@ func resourceAlicloudRdsBackup() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				Computed: true,
+				ForceNew: true,
 			},
 			"db_instance_id": {
 				Type:     schema.TypeString,
@@ -71,10 +72,7 @@ func resourceAlicloudRdsBackupCreate(d *schema.ResourceData, meta interface{}) e
 	action := "CreateBackup"
 	request := make(map[string]interface{})
 	request["SourceIp"] = client.SourceIp
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("backup_method"); ok {
 		request["BackupMethod"] = v
 	}
@@ -88,11 +86,11 @@ func resourceAlicloudRdsBackupCreate(d *schema.ResourceData, meta interface{}) e
 	if v, ok := d.GetOk("db_name"); ok {
 		request["DBName"] = v
 	}
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"BackupJobExists"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -151,17 +149,13 @@ func resourceAlicloudRdsBackupDelete(d *schema.ResourceData, meta interface{}) e
 		}
 	}
 	var response map[string]interface{}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	request := map[string]interface{}{
 		"BackupId":     parts[1],
 		"DBInstanceId": parts[0],
 	}
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

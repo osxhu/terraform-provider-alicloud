@@ -1,5 +1,5 @@
 ---
-subcategory: "Elastic Desktop Service(EDS)"
+subcategory: "Elastic Desktop Service (ECD)"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_ecd_ad_connector_office_site"
 sidebar_current: "docs-alicloud-resource-ecd-ad-connector-office-site"
@@ -7,19 +7,29 @@ description: |-
   Provides a Alicloud ECD Ad Connector Office Site resource.
 ---
 
-# alicloud\_ecd\_ad\_connector\_office\_site
+# alicloud_ecd_ad_connector_office_site
 
 Provides a ECD Ad Connector Office Site resource.
 
-For information about ECD Ad Connector Office Site and how to use it, see [What is Ad Connector Office Site](https://www.alibabacloud.com/help/en/elastic-desktop-service/latest/createadconnectorofficesite).
+For information about ECD Ad Connector Office Site and how to use it, see [What is Ad Connector Office Site](https://www.alibabacloud.com/help/en/wuying-workspace/developer-reference/api-ecd-2020-09-30-createadconnectorofficesite).
 
--> **NOTE:** Available in v1.176.0+.
+-> **NOTE:** Available since v1.176.0.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_ecd_ad_connector_office_site&exampleId=54b04686-69f8-771d-b0f4-515c3c40112ed648b315&activeTab=example&spm=docs.r.ecd_ad_connector_office_site.0.54b0468669&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+variable "name" {
+  default = "terraform-example"
+}
+
 resource "alicloud_cen_instance" "default" {
   cen_instance_name = var.name
   protection_level  = "REDUCED"
@@ -32,14 +42,14 @@ resource "alicloud_ecd_ad_connector_office_site" "default" {
   cidr_block                    = "10.0.0.0/12"
   desktop_access_type           = "INTERNET"
   dns_address                   = ["127.0.0.2"]
-  domain_name                   = "example1234.com"
-  domain_password               = "YourPassword1234"
-  domain_user_name              = "Administrator"
-  enable_admin_access           = true
-  enable_internet_access        = true
+  domain_name                   = "corp.example.com"
+  domain_password               = "Example1234"
+  domain_user_name              = "sAMAccountName"
+  enable_admin_access           = false
+  enable_internet_access        = false
   mfa_enabled                   = false
   sub_domain_dns_address        = ["127.0.0.3"]
-  sub_domain_name               = "child.example1234.com"
+  sub_domain_name               = "child.example.com"
 }
 ```
 
@@ -77,7 +87,7 @@ The following attributes are exported:
 * `id` - The resource ID in terraform of Ad Connector Office Site.
 * `status` - The resource State.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

@@ -3,9 +3,9 @@ package alicloud
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -42,6 +42,23 @@ func resourceAlicloudDBDatabase() *schema.Resource {
 				Optional: true,
 				Default:  "utf8",
 				ForceNew: true,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if strings.ToLower(old) == strings.ToLower(new) {
+						return true
+					}
+					newArray := strings.Split(new, ",")
+					oldArray := strings.Split(old, ",")
+					if d.Id() != "" && len(oldArray) > 1 && len(newArray) == 1 && strings.ToLower(newArray[0]) == strings.ToLower(oldArray[0]) {
+						return true
+					}
+					/*
+					  SQLServer creates a database, when a non native engine character set is passed in, the SDK will assign the default character set.
+					*/
+					if old == "Chinese_PRC_CI_AS" && new == "utf8" {
+						return true
+					}
+					return false
+				},
 			},
 
 			"description": {
@@ -66,13 +83,9 @@ func resourceAlicloudDBDatabaseCreate(d *schema.ResourceData, meta interface{}) 
 	if v, ok := d.GetOk("description"); ok && v.(string) != "" {
 		request["DBDescription"] = v
 	}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
+	var err error
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err := client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, OperationDeniedDBStatus) || NeedRetry(err) {
 				return resource.RetryableError(err)
@@ -106,7 +119,13 @@ func resourceAlicloudDBDatabaseRead(d *schema.ResourceData, meta interface{}) er
 
 	d.Set("instance_id", object["DBInstanceId"])
 	d.Set("name", object["DBName"])
-	d.Set("character_set", object["CharacterSetName"])
+	if string(PostgreSQL) == object["Engine"] {
+		var strArray = []string{object["CharacterSetName"].(string), object["Collate"].(string), object["Ctype"].(string)}
+		postgreSQLCharacterSet := strings.Join(strArray, ",")
+		d.Set("character_set", postgreSQLCharacterSet)
+	} else {
+		d.Set("character_set", object["CharacterSetName"])
+	}
 	d.Set("description", object["DBDescription"])
 
 	return nil
@@ -127,11 +146,8 @@ func resourceAlicloudDBDatabaseUpdate(d *schema.ResourceData, meta interface{}) 
 			"DBDescription": d.Get("description"),
 			"SourceIp":      client.SourceIp,
 		}
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+
+		response, err := client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
@@ -158,11 +174,7 @@ func resourceAlicloudDBDatabaseDelete(d *schema.ResourceData, meta interface{}) 
 	if err := rdsService.WaitForDBInstance(parts[0], Running, 1800); err != nil {
 		return WrapError(err)
 	}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	response, err := client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 	if err != nil {
 		if NotFoundError(err) || IsExpectedErrors(err, []string{"InvalidDBName.NotFound"}) {
 			return nil

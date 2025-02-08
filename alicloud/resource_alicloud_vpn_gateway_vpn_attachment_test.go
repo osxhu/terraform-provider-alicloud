@@ -40,30 +40,23 @@ func testSweepVpnGatewayVpnAttachment(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting Alicloud client: %s", err)
 	}
-	aliyunClient := rawClient.(*connectivity.AliyunClient)
+	client := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
 		"tf-testAcc",
 		"tf_testAcc",
 	}
 	action := "DescribeVpnConnections"
 	request := map[string]interface{}{}
-	request["RegionId"] = aliyunClient.RegionId
+	request["RegionId"] = client.RegionId
 
 	request["PageSize"] = PageSizeLarge
 	request["PageNumber"] = 1
 
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewVpcClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -103,9 +96,9 @@ func testSweepVpnGatewayVpnAttachment(region string) error {
 			action := "DeleteVpnAttachment"
 			request := map[string]interface{}{
 				"VpnConnectionId": item["VpnConnectionId"],
-				"RegionId":        aliyunClient.RegionId,
+				"RegionId":        client.RegionId,
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Vpn Gateway Vpn Attachment (%s): %s", name, err)
 			}
@@ -231,6 +224,16 @@ func TestAccAlicloudVPNGatewayVpnAttachment_basic0(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConfig(map[string]interface{}{
+					"customer_gateway_id": "${alicloud_vpn_customer_gateway.defaultone.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"customer_gateway_id": CHECKSET,
+					}),
+				),
+			},
+			{
 				ResourceName:      resourceId,
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -255,6 +258,14 @@ resource "alicloud_vpn_customer_gateway" "default" {
 	asn = "45014"
 	description = "testAccVpnConnectionDesc"
 }
+
+resource "alicloud_vpn_customer_gateway" "defaultone" {
+  name        = "${var.name}"
+  ip_address  = "41.104.22.229"
+  asn = "45014"
+  description = "${var.name}"
+}
+
 `, name)
 }
 

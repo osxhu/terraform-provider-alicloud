@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/hashcode"
@@ -259,18 +258,13 @@ func attachVserverGroups(d *schema.ResourceData, client *connectivity.AliyunClie
 		request["VServerGroup"] = attachScalingGroupVserverGroups
 
 		action := "AttachVServerGroups"
-		conn, err := client.NewEssClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		request["ClientToken"] = buildClientToken(action)
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
+		var err error
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-28"), StringPointer("AK"), nil, request, &runtime)
+			request["ClientToken"] = buildClientToken(action)
+			response, err = client.RpcPost("Ess", "2014-08-28", action, nil, request, true)
 			if err != nil {
-				if NeedRetry(err) {
+				if NeedRetry(err) || IsExpectedErrors(err, []string{"VServerGroupProcessing", "BackendServer.configuring"}) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -316,16 +310,11 @@ func detachVserverGroups(d *schema.ResourceData, client *connectivity.AliyunClie
 		request["VServerGroup"] = detachScalingGroupVserverGroups
 
 		action := "DetachVServerGroups"
-		conn, err := client.NewEssClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		request["ClientToken"] = buildClientToken(action)
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
+		var err error
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-28"), StringPointer("AK"), nil, request, &runtime)
+			request["ClientToken"] = buildClientToken(action)
+			response, err = client.RpcPost("Ess", "2014-08-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()

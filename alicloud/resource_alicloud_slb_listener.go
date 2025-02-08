@@ -16,12 +16,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
-func resourceAliyunSlbListener() *schema.Resource {
+func resourceAliCloudSlbListener() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAliyunSlbListenerCreate,
-		Read:   resourceAliyunSlbListenerRead,
-		Update: resourceAliyunSlbListenerUpdate,
-		Delete: resourceAliyunSlbListenerDelete,
+		Create: resourceAliCloudSlbListenerCreate,
+		Read:   resourceAliCloudSlbListenerRead,
+		Update: resourceAliCloudSlbListenerUpdate,
+		Delete: resourceAliCloudSlbListenerDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
@@ -38,38 +38,38 @@ func resourceAliyunSlbListener() *schema.Resource {
 			},
 			"frontend_port": {
 				Type:         schema.TypeInt,
-				ValidateFunc: validation.IntBetween(1, 65535),
+				ValidateFunc: IntBetween(1, 65535),
 				Required:     true,
 				ForceNew:     true,
 			},
 			"lb_port": {
 				Type:       schema.TypeInt,
 				Optional:   true,
-				Deprecated: "Field 'lb_port' has been deprecated, and using 'frontend_port' to replace.",
+				Deprecated: "Field 'lb_port' has been removed since 1.211.0.",
 			},
 
 			"backend_port": {
 				Type:         schema.TypeInt,
-				ValidateFunc: validation.IntBetween(1, 65535),
+				ValidateFunc: IntBetween(1, 65535),
 				Optional:     true,
 				ForceNew:     true,
 			},
 
 			"instance_port": {
-				Type:       schema.TypeInt,
-				Optional:   true,
-				Deprecated: "Field 'instance_port' has been deprecated, and using 'backend_port' to replace.",
+				Type:     schema.TypeInt,
+				Optional: true,
+				Removed:  "Field 'instance_port' has been removed since 1.211.0",
 			},
 
 			"lb_protocol": {
 				Type:       schema.TypeString,
 				Optional:   true,
-				Deprecated: "Field 'lb_protocol' has been deprecated, and using 'protocol' to replace.",
+				Deprecated: "Field 'lb_protocol' has been removed since 1.211.0.",
 			},
 
 			"protocol": {
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"http", "https", "tcp", "udp"}, false),
+				ValidateFunc: StringInSlice([]string{"http", "https", "tcp", "udp"}, false),
 				Required:     true,
 				ForceNew:     true,
 			},
@@ -84,7 +84,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			},
 			"scheduler": {
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"wrr", "wlc", "rr", "sch", "tch", "qch"}, false),
+				ValidateFunc: StringInSlice([]string{"wrr", "wlc", "rr", "sch", "tch", "qch"}, false),
 				Optional:     true,
 				Default:      WRRScheduler,
 			},
@@ -98,13 +98,13 @@ func resourceAliyunSlbListener() *schema.Resource {
 			},
 			"acl_status": {
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"on", "off"}, false),
+				ValidateFunc: StringInSlice([]string{"on", "off"}, false),
 				Optional:     true,
 				Default:      OffFlag,
 			},
 			"acl_type": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringInSlice([]string{"black", "white"}, false),
+				ValidateFunc:     StringInSlice([]string{"black", "white"}, false),
 				Optional:         true,
 				DiffSuppressFunc: slbAclDiffSuppressFunc,
 			},
@@ -116,7 +116,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"sticky_session": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringInSlice([]string{"on", "off"}, false),
+				ValidateFunc:     StringInSlice([]string{"on", "off"}, false),
 				Optional:         true,
 				Default:          OffFlag,
 				DiffSuppressFunc: httpHttpsDiffSuppressFunc,
@@ -124,7 +124,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"sticky_session_type": {
 				Type: schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{
+				ValidateFunc: StringInSlice([]string{
 					string(InsertStickySessionType),
 					string(ServerStickySessionType)}, false),
 				Optional:         true,
@@ -133,21 +133,21 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"cookie_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 86400),
+				ValidateFunc:     IntBetween(1, 86400),
 				Optional:         true,
 				DiffSuppressFunc: cookieTimeoutDiffSuppressFunc,
 			},
 			//http & https
 			"cookie": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringLenBetween(1, 200),
+				ValidateFunc:     StringLenBetween(1, 200),
 				Optional:         true,
 				DiffSuppressFunc: cookieDiffSuppressFunc,
 			},
 			//tcp & udp
 			"persistence_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(0, 3600),
+				ValidateFunc:     IntBetween(0, 3600),
 				Optional:         true,
 				Default:          0,
 				DiffSuppressFunc: tcpUdpDiffSuppressFunc,
@@ -155,7 +155,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"health_check": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringInSlice([]string{"on", "off"}, false),
+				ValidateFunc:     StringInSlice([]string{"on", "off"}, false),
 				Optional:         true,
 				Default:          OnFlag,
 				DiffSuppressFunc: httpHttpsDiffSuppressFunc,
@@ -163,14 +163,14 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"health_check_method": {
 				Type:         schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{"head", "get"}, false),
+				ValidateFunc: StringInSlice([]string{"head", "get"}, false),
 				Optional:     true,
 				Computed:     true,
 			},
 			//tcp
 			"health_check_type": {
 				Type: schema.TypeString,
-				ValidateFunc: validation.StringInSlice([]string{
+				ValidateFunc: StringInSlice([]string{
 					string(TCPHealthCheckType),
 					string(HTTPHealthCheckType)}, false),
 				Optional:         true,
@@ -180,14 +180,14 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https & tcp
 			"health_check_domain": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringDoesNotMatch(regexp.MustCompile(`^\$_ip$`), "value '$_ip' has been deprecated, and empty string will replace it"),
+				ValidateFunc:     StringDoesNotMatch(regexp.MustCompile(`^\$_ip$`), "value '$_ip' has been deprecated, and empty string will replace it"),
 				Optional:         true,
 				DiffSuppressFunc: httpHttpsTcpDiffSuppressFunc,
 			},
 			//http & https & tcp
 			"health_check_uri": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringLenBetween(1, 80),
+				ValidateFunc:     StringLenBetween(1, 80),
 				Optional:         true,
 				Default:          "/",
 				DiffSuppressFunc: httpHttpsTcpDiffSuppressFunc,
@@ -203,14 +203,14 @@ func resourceAliyunSlbListener() *schema.Resource {
 			},
 			"healthy_threshold": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 10),
+				ValidateFunc:     IntBetween(1, 10),
 				Optional:         true,
 				Default:          3,
 				DiffSuppressFunc: healthCheckDiffSuppressFunc,
 			},
 			"unhealthy_threshold": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 10),
+				ValidateFunc:     IntBetween(1, 10),
 				Optional:         true,
 				Default:          3,
 				DiffSuppressFunc: healthCheckDiffSuppressFunc,
@@ -218,14 +218,14 @@ func resourceAliyunSlbListener() *schema.Resource {
 
 			"health_check_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 300),
+				ValidateFunc:     IntBetween(1, 300),
 				Optional:         true,
 				Default:          5,
 				DiffSuppressFunc: healthCheckDiffSuppressFunc,
 			},
 			"health_check_interval": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 50),
+				ValidateFunc:     IntBetween(1, 50),
 				Optional:         true,
 				Default:          2,
 				DiffSuppressFunc: healthCheckDiffSuppressFunc,
@@ -272,7 +272,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						// At present, retrive client ip can not be modified, and it default to true.
+						// At present, retrieve client ip can not be modified, and it default to true.
 						"retrive_client_ip": {
 							Type:     schema.TypeBool,
 							Computed: true,
@@ -299,7 +299,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//tcp
 			"established_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(10, 900),
+				ValidateFunc:     IntBetween(10, 900),
 				Optional:         true,
 				Default:          900,
 				DiffSuppressFunc: establishedTimeoutDiffSuppressFunc,
@@ -308,7 +308,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"idle_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 60),
+				ValidateFunc:     IntBetween(1, 60),
 				Optional:         true,
 				Default:          15,
 				DiffSuppressFunc: httpHttpsDiffSuppressFunc,
@@ -317,7 +317,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//http & https
 			"request_timeout": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 180),
+				ValidateFunc:     IntBetween(1, 180),
 				Optional:         true,
 				Default:          60,
 				DiffSuppressFunc: httpHttpsDiffSuppressFunc,
@@ -326,7 +326,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 			//https
 			"enable_http2": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringInSlice([]string{"on", "off"}, false),
+				ValidateFunc:     StringInSlice([]string{"on", "off"}, false),
 				Optional:         true,
 				Default:          OnFlag,
 				DiffSuppressFunc: httpsDiffSuppressFunc,
@@ -336,20 +336,20 @@ func resourceAliyunSlbListener() *schema.Resource {
 			"tls_cipher_policy": {
 				Type:             schema.TypeString,
 				Default:          "tls_cipher_policy_1_0",
-				ValidateFunc:     validation.StringInSlice([]string{"tls_cipher_policy_1_0", "tls_cipher_policy_1_1", "tls_cipher_policy_1_2", "tls_cipher_policy_1_2_strict"}, false),
+				ValidateFunc:     StringInSlice([]string{"tls_cipher_policy_1_0", "tls_cipher_policy_1_1", "tls_cipher_policy_1_2", "tls_cipher_policy_1_2_strict", "tls_cipher_policy_1_2_strict_with_1_3"}, false),
 				Optional:         true,
 				DiffSuppressFunc: httpsDiffSuppressFunc,
 			},
 			"forward_port": {
 				Type:             schema.TypeInt,
-				ValidateFunc:     validation.IntBetween(1, 65535),
+				ValidateFunc:     IntBetween(1, 65535),
 				Optional:         true,
 				ForceNew:         true,
 				DiffSuppressFunc: forwardPortDiffSuppressFunc,
 			},
 			"listener_forward": {
 				Type:             schema.TypeString,
-				ValidateFunc:     validation.StringInSlice([]string{"on", "off"}, false),
+				ValidateFunc:     StringInSlice([]string{"on", "off"}, false),
 				Optional:         true,
 				ForceNew:         true,
 				Computed:         true,
@@ -368,7 +368,7 @@ func resourceAliyunSlbListener() *schema.Resource {
 	}
 }
 
-func resourceAliyunSlbListenerCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSlbListenerCreate(d *schema.ResourceData, meta interface{}) error {
 
 	client := meta.(*connectivity.AliyunClient)
 	slbService := SlbService{client}
@@ -456,12 +456,12 @@ func resourceAliyunSlbListenerCreate(d *schema.ResourceData, meta interface{}) e
 		return WrapError(err)
 	}
 	if httpForward {
-		return resourceAliyunSlbListenerRead(d, meta)
+		return resourceAliCloudSlbListenerRead(d, meta)
 	}
-	return resourceAliyunSlbListenerUpdate(d, meta)
+	return resourceAliCloudSlbListenerUpdate(d, meta)
 }
 
-func resourceAliyunSlbListenerRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSlbListenerRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	slbService := SlbService{client}
 
@@ -500,7 +500,7 @@ func resourceAliyunSlbListenerRead(d *schema.ResourceData, meta interface{}) err
 	})
 }
 
-func resourceAliyunSlbListenerUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSlbListenerUpdate(d *schema.ResourceData, meta interface{}) error {
 	proto := d.Get("protocol").(string)
 	lb_id := d.Get("load_balancer_id").(string)
 	frontend := d.Get("frontend_port").(int)
@@ -758,21 +758,34 @@ func resourceAliyunSlbListenerUpdate(d *schema.ResourceData, meta interface{}) e
 		default:
 			request = httpArgs
 		}
-		raw, err := client.WithSlbClient(func(slbClient *slb.Client) (interface{}, error) {
-			return slbClient.ProcessCommonRequest(request)
+		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
+			raw, err := client.WithSlbClient(func(slbClient *slb.Client) (interface{}, error) {
+				return slbClient.ProcessCommonRequest(request)
+			})
+			if err != nil {
+				if IsExpectedErrors(err, []string{"OperationFailed.ListenerStatusNotSupport"}) {
+					return resource.RetryableError(err)
+				}
+				return resource.NonRetryableError(err)
+			}
+			addDebug(request.GetActionName(), raw, request.QueryParams, request)
+			return nil
 		})
 		if err != nil {
+			if IsExpectedErrors(err, []string{"The specified VServerGroupId does not exist"}) {
+				return WrapErrorf(err, DefaultErrorMsg+"%s", d.Id(), request.GetActionName(),
+					"Listener and server group should belong to the same load balancer, please check it.", AlibabaCloudSdkGoERROR)
+			}
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), request.GetActionName(), AlibabaCloudSdkGoERROR)
 		}
-		addDebug(request.GetActionName(), raw, request, request.QueryParams)
 	}
 
 	d.Partial(false)
 
-	return resourceAliyunSlbListenerRead(d, meta)
+	return resourceAliCloudSlbListenerRead(d, meta)
 }
 
-func resourceAliyunSlbListenerDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudSlbListenerDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	slbService := SlbService{client}
 

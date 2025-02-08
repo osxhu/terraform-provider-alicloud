@@ -37,29 +37,21 @@ func testSweepVpcPrefixList(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting Alicloud client: %s", err)
 	}
-	aliyunClient := rawClient.(*connectivity.AliyunClient)
+	client := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
 		"tf-testAcc",
 		"tf_testAcc",
 	}
 	action := "ListPrefixLists"
 	request := map[string]interface{}{}
-	request["RegionId"] = aliyunClient.RegionId
-
+	request["RegionId"] = client.RegionId
 	request["MaxResults"] = PageSizeLarge
-
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewVpcClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
+
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -97,9 +89,9 @@ func testSweepVpcPrefixList(region string) error {
 				action := "DeleteVpcPrefixList"
 				request := map[string]interface{}{
 					"PrefixListId": item["PrefixListId"],
-					"RegionId":     aliyunClient.RegionId,
+					"RegionId":     client.RegionId,
 				}
-				_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 				if err != nil {
 					log.Printf("[ERROR] Failed to delete Vpc Prefix List (%s): %s", item["PrefixListName"].(string), err)
 				}
@@ -121,7 +113,7 @@ func TestAccAlicloudVPCPrefixList_basic0(t *testing.T) {
 	resourceId := "alicloud_vpc_prefix_list.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCPrefixListMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcPrefixList")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -172,6 +164,7 @@ var AlicloudVPCPrefixListMap0 = map[string]string{
 	"ip_version":  CHECKSET,
 	"entrys.#":    CHECKSET,
 	"max_entries": CHECKSET,
+	"status":      CHECKSET,
 }
 
 func AlicloudVPCPrefixListBasicDependence0(name string) string {
@@ -187,7 +180,7 @@ func TestAccAlicloudVPCPrefixList_basic1(t *testing.T) {
 	resourceId := "alicloud_vpc_prefix_list.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCPrefixListMap1)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcPrefixList")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -257,6 +250,16 @@ func TestAccAlicloudVPCPrefixList_basic1(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConfig(map[string]interface{}{
+					"entrys": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"entrys.#": "0",
+					}),
+				),
+			},
+			{
 				ResourceName:      resourceId,
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -270,7 +273,7 @@ func TestAccAlicloudVPCPrefixList_basic2(t *testing.T) {
 	resourceId := "alicloud_vpc_prefix_list.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCPrefixListMap1)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcPrefixList")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -308,6 +311,7 @@ var AlicloudVPCPrefixListMap1 = map[string]string{
 	"max_entries": CHECKSET,
 	"entrys.#":    CHECKSET,
 	"ip_version":  CHECKSET,
+	"status":      CHECKSET,
 }
 
 func AlicloudVPCPrefixListBasicDependence1(name string) string {
@@ -624,3 +628,309 @@ func TestUnitAccAlicloudVpcPrefixList(t *testing.T) {
 		}
 	}
 }
+
+// Test Vpc PrefixList. >>> Resource test cases, automatically generated.
+// Case 3120
+func TestAccAlicloudVpcPrefixList_basic3120(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_prefix_list.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcPrefixListMap3120)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPrefixList")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%sVpcPrefixList%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcPrefixListBasicDependence3120)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"prefix_list_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"prefix_list_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"max_entries": "50",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"max_entries": "50",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.defaultRg.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"prefix_list_description": "test",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"prefix_list_description": "test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"entrys": []map[string]interface{}{
+						{
+							"cidr":        "192.168.0.0/16",
+							"description": "test",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"entrys.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"max_entries": "40",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"max_entries": "40",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.changeRg.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"prefix_list_description": "testupdate",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"prefix_list_description": "testupdate",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"prefix_list_name": name + "_update",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"prefix_list_name": name + "_update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"entrys": []map[string]interface{}{
+						{
+							"cidr":        "10.0.0.0/8",
+							"description": "testupdate",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"entrys.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"entrys": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"entrys.#": "0",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"max_entries":             "50",
+					"resource_group_id":       "${alicloud_resource_manager_resource_group.defaultRg.id}",
+					"prefix_list_description": "test",
+					"ip_version":              "IPV4",
+					"prefix_list_name":        name + "_update",
+					"entrys": []map[string]interface{}{
+						{
+							"cidr":        "192.168.0.0/16",
+							"description": "test",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"max_entries":             "50",
+						"resource_group_id":       CHECKSET,
+						"prefix_list_description": "test",
+						"ip_version":              "IPV4",
+						"prefix_list_name":        name + "_update",
+						"entrys.#":                "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{},
+			},
+		},
+	})
+}
+
+var AlicloudVpcPrefixListMap3120 = map[string]string{}
+
+func AlicloudVpcPrefixListBasicDependence3120(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+resource "alicloud_resource_manager_resource_group" "defaultRg" {
+  display_name        = "tf-testacc-chenyi"
+  resource_group_name = var.name
+}
+
+resource "alicloud_resource_manager_resource_group" "changeRg" {
+  display_name        = "tf-testacc-chenyi-change"
+  resource_group_name = "${var.name}1"
+}
+
+
+`, name)
+}
+
+// Case 3120  twin
+func TestAccAlicloudVpcPrefixList_basic3120_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_prefix_list.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcPrefixListMap3120)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPrefixList")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%sVpcPrefixList%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcPrefixListBasicDependence3120)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"max_entries":             "40",
+					"resource_group_id":       "${alicloud_resource_manager_resource_group.changeRg.id}",
+					"prefix_list_description": "testupdate",
+					"ip_version":              "IPV4",
+					"prefix_list_name":        name,
+					"entrys": []map[string]interface{}{
+						{
+							"cidr":        "10.0.0.0/8",
+							"description": "testupdate",
+						},
+					},
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"max_entries":             "40",
+						"resource_group_id":       CHECKSET,
+						"prefix_list_description": "testupdate",
+						"ip_version":              "IPV4",
+						"prefix_list_name":        name,
+						"entrys.#":                "1",
+						"tags.%":                  "2",
+						"tags.Created":            "TF",
+						"tags.For":                "Test",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{},
+			},
+		},
+	})
+}
+
+// Test Vpc PrefixList. <<< Resource test cases, automatically generated.

@@ -34,14 +34,9 @@ func init() {
 func testSweepCmsEventRules(region string) error {
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return fmt.Errorf("error getting Alicloud client: %s", err)
+		return fmt.Errorf("error getting AliCloud client: %s", err)
 	}
 	client := rawClient.(*connectivity.AliyunClient)
-
-	conn, err := client.NewCmsClient()
-	if err != nil {
-		return WrapError(err)
-	}
 
 	prefixes := []string{
 		"tf-testAcc",
@@ -54,11 +49,9 @@ func testSweepCmsEventRules(region string) error {
 	var response map[string]interface{}
 	cmsEventRuleIds := make([]string, 0)
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Cms", "2019-01-01", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -83,15 +76,17 @@ func testSweepCmsEventRules(region string) error {
 		for _, v := range result {
 			skip := true
 			item := v.(map[string]interface{})
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(fmt.Sprint(item["Name"])), strings.ToLower(prefix)) {
-					skip = false
-					break
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(fmt.Sprint(item["Name"])), strings.ToLower(prefix)) {
+						skip = false
+						break
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping CmsEventRule Instance: %v", item["Name"])
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping CmsEventRule Instance: %v", item["Name"])
+					continue
+				}
 			}
 			cmsEventRuleIds = append(cmsEventRuleIds, fmt.Sprint(item["Name"]))
 		}
@@ -111,7 +106,7 @@ func testSweepCmsEventRules(region string) error {
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-		_, err = conn.DoRequest(StringPointer(deleteAction), nil, StringPointer("POST"), StringPointer("2019-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		_, err = client.RpcPost("Cms", "2019-01-01", deleteAction, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -128,18 +123,18 @@ func testSweepCmsEventRules(region string) error {
 	return nil
 }
 
-func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
+func TestAccAliCloudCloudMonitorServiceEventRule_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_cms_event_rule.default"
-	ra := resourceAttrInit(resourceId, resourceAlicloudCmsEventRuleMap)
+	ra := resourceAttrInit(resourceId, resourceAliCloudCloudMonitorServiceEventRuleMap)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &CmsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeCmsEventRule")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
-	name := fmt.Sprintf("tf-testAcc%sCmsEventRule-name%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceAlicloudCmsEventRuleBasicDependence)
+	name := fmt.Sprintf("tf-testacc%scmseventrule-name%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceAliCloudCloudMonitorServiceEventRuleBasicDependence)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -150,35 +145,23 @@ func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"rule_name":   name,
-					"group_id":    "${alicloud_cms_monitor_group.default.id}",
-					"description": "tf-testAcc",
-					"status":      "ENABLED",
+					"rule_name": name,
 					"event_pattern": []map[string]interface{}{
 						{
-							"product":         "ecs",
-							"event_type_list": []string{"StatusNotification"},
-							"level_list":      []string{"CRITICAL"},
-							"name_list":       []string{"test"},
-							"sql_filter":      "test",
+							"product": "ecs",
 						},
 					},
-					"silence_time": "100",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"rule_name":       name,
-						"group_id":        CHECKSET,
-						"description":     "tf-testAcc",
-						"status":          "ENABLED",
 						"event_pattern.#": "1",
-						"silence_time":    "100",
 					}),
 				),
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"group_id": "${alicloud_cms_monitor_group.new.id}",
+					"group_id": "${alicloud_cms_monitor_group.default.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -188,11 +171,21 @@ func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"description": "update-tf-testAcc",
+					"silence_time": "1000",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"description": "update-tf-testAcc",
+						"silence_time": "1000",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
 					}),
 				),
 			},
@@ -212,9 +205,6 @@ func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
 						{
 							"product":         "ads",
 							"event_type_list": []string{"Exception"},
-							"level_list":      []string{"WARN"},
-							"name_list":       []string{"update_test"},
-							"sql_filter":      "update_test",
 						},
 					},
 				}),
@@ -226,11 +216,165 @@ func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"silence_time": "1000",
+					"event_pattern": []map[string]interface{}{
+						{
+							"product":    "ads",
+							"level_list": []string{"WARN"},
+						},
+					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"silence_time": "1000",
+						"event_pattern.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"event_pattern": []map[string]interface{}{
+						{
+							"product":   "ads",
+							"name_list": []string{"update_test"},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"event_pattern.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"event_pattern": []map[string]interface{}{
+						{
+							"product":    "ads",
+							"sql_filter": "test",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"event_pattern.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"contact_parameters": []map[string]interface{}{
+						{
+							"contact_parameters_id": "1",
+							"contact_group_name":    "${alicloud_arms_alert_contact_group.default.id}",
+							"level":                 "2",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"contact_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"webhook_parameters": []map[string]interface{}{
+						{
+							"webhook_parameters_id": "2",
+							"protocol":              "telnet",
+							"method":                "get",
+							"url":                   "http://www.aliyun.com",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"webhook_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"fc_parameters": []map[string]interface{}{
+						{
+							"fc_parameters_id": "3",
+							"service_name":     "${alicloud_fc_function.default.service}",
+							"function_name":    "${alicloud_fc_function.default.name}",
+							"region":           defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"fc_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"sls_parameters": []map[string]interface{}{
+						{
+							"sls_parameters_id": "4",
+							"project":           "${alicloud_log_store.default.project}",
+							"log_store":         "${alicloud_log_store.default.name}",
+							"region":            defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"sls_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"mns_parameters": []map[string]interface{}{
+						{
+							"mns_parameters_id": "5",
+							"queue":             "${alicloud_message_service_queue.default.id}",
+							"region":            defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"mns_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"mns_parameters": []map[string]interface{}{
+						{
+							"mns_parameters_id": "5",
+							"queue":             "",
+							"topic":             "${alicloud_message_service_topic.default.id}",
+							"region":            defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"mns_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"open_api_parameters": []map[string]interface{}{
+						{
+							"open_api_parameters_id": "6",
+							"product":                "log",
+							"action":                 "PutLogs",
+							"version":                "2018-03-08",
+							"role":                   "${alicloud_ram_role.default.id}",
+							"region":                 defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"open_api_parameters.#": "1",
 					}),
 				),
 			},
@@ -243,26 +387,211 @@ func TestAccAlicloudCmsEventRule_basic00(t *testing.T) {
 	})
 }
 
-var resourceAlicloudCmsEventRuleMap = map[string]string{}
+func TestAccAliCloudCloudMonitorServiceEventRule_basic0_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_cms_event_rule.default"
+	ra := resourceAttrInit(resourceId, resourceAliCloudCloudMonitorServiceEventRuleMap)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CmsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCmsEventRule")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%scmseventrule-name%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceAliCloudCloudMonitorServiceEventRuleBasicDependence)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"rule_name":    name,
+					"group_id":     "${alicloud_cms_monitor_group.default.id}",
+					"silence_time": "100",
+					"description":  name,
+					"status":       "ENABLED",
+					"event_pattern": []map[string]interface{}{
+						{
+							"product":         "ecs",
+							"event_type_list": []string{"StatusNotification"},
+							"level_list":      []string{"CRITICAL"},
+							"name_list":       []string{"test"},
+							"sql_filter":      "test",
+						},
+					},
+					"contact_parameters": []map[string]interface{}{
+						{
+							"contact_parameters_id": "1",
+							"contact_group_name":    "${alicloud_arms_alert_contact_group.default.id}",
+							"level":                 "2",
+						},
+					},
+					"webhook_parameters": []map[string]interface{}{
+						{
+							"webhook_parameters_id": "2",
+							"protocol":              "telnet",
+							"method":                "get",
+							"url":                   "http://www.aliyun.com",
+						},
+					},
+					"fc_parameters": []map[string]interface{}{
+						{
+							"fc_parameters_id": "3",
+							"service_name":     "${alicloud_fc_function.default.service}",
+							"function_name":    "${alicloud_fc_function.default.name}",
+							"region":           defaultRegionToTest,
+						},
+					},
+					"sls_parameters": []map[string]interface{}{
+						{
+							"sls_parameters_id": "4",
+							"project":           "${alicloud_log_store.default.project}",
+							"log_store":         "${alicloud_log_store.default.name}",
+							"region":            defaultRegionToTest,
+						},
+					},
+					"mns_parameters": []map[string]interface{}{
+						{
+							"mns_parameters_id": "5",
+							"queue":             "${alicloud_message_service_queue.default.id}",
+							"region":            defaultRegionToTest,
+						},
+					},
+					"open_api_parameters": []map[string]interface{}{
+						{
+							"open_api_parameters_id": "6",
+							"product":                "log",
+							"action":                 "PutLogs",
+							"version":                "2018-03-08",
+							"role":                   "${alicloud_ram_role.default.id}",
+							"region":                 defaultRegionToTest,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"rule_name":             name,
+						"group_id":              CHECKSET,
+						"silence_time":          "100",
+						"description":           name,
+						"status":                "ENABLED",
+						"event_pattern.#":       "1",
+						"contact_parameters.#":  "1",
+						"webhook_parameters.#":  "1",
+						"fc_parameters.#":       "1",
+						"sls_parameters.#":      "1",
+						"mns_parameters.#":      "1",
+						"open_api_parameters.#": "1",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
 
-func resourceAlicloudCmsEventRuleBasicDependence(name string) string {
+var resourceAliCloudCloudMonitorServiceEventRuleMap = map[string]string{
+	"status": CHECKSET,
+}
+
+func resourceAliCloudCloudMonitorServiceEventRuleBasicDependence(name string) string {
 	return fmt.Sprintf(`
-variable "name" {
-	default = "%s"
-}
+	variable "name" {
+  		default = "%s"
+	}
 
-resource "alicloud_cms_monitor_group" "default" {
-	monitor_group_name = var.name
-}
+	resource "alicloud_cms_monitor_group" "default" {
+  		monitor_group_name = var.name
+	}
 
-resource "alicloud_cms_monitor_group" "new" {
-	monitor_group_name = "${var.name}_new"
-}
+	resource "alicloud_oss_bucket" "default" {
+  		bucket = var.name
+	}
 
+	resource "alicloud_oss_bucket_object" "default" {
+  		bucket  = alicloud_oss_bucket.default.id
+  		key     = "fc/hello.zip"
+  		content = <<EOF
+		# -*- coding: utf-8 -*-
+		def handler(event, context):
+		print "hello world"
+		return 'hello world'
+		EOF
+	}
+
+	resource "alicloud_fc_service" "default" {
+  		name = var.name
+	}
+
+	resource "alicloud_fc_function" "default" {
+  		service    = alicloud_fc_service.default.name
+  		name       = var.name
+  		oss_bucket = alicloud_oss_bucket.default.id
+  		oss_key    = alicloud_oss_bucket_object.default.key
+  		runtime    = "python3.10"
+  		handler    = "hello.handler"
+	}
+
+	resource "alicloud_arms_alert_contact" "default" {
+  		alert_contact_name = var.name
+  		email              = "${var.name}@aaa.com"
+	}
+
+	resource "alicloud_arms_alert_contact_group" "default" {
+  		alert_contact_group_name = var.name
+  		contact_ids              = [alicloud_arms_alert_contact.default.id]
+	}
+
+	resource "alicloud_log_project" "default" {
+  		name = var.name
+	}
+
+	resource "alicloud_log_store" "default" {
+  		project = alicloud_log_project.default.name
+  		name    = var.name
+	}
+
+	resource "alicloud_message_service_queue" "default" {
+  		queue_name = var.name
+	}
+
+	resource "alicloud_message_service_topic" "default" {
+  		topic_name = var.name
+	}
+
+	resource "alicloud_ram_role" "default" {
+  		name     = var.name
+  		document = <<EOF
+		{
+			"Statement": [
+				{
+					"Action": "sts:AssumeRole",
+					"Effect": "Allow",
+					"Principal": {
+					"Service": [
+					"apigateway.aliyuncs.com",
+					"ecs.aliyuncs.com"
+					]
+					}
+				}
+		  	],
+			"Version": "1"
+		}
+	  	EOF
+		force    = true
+	}
 `, name)
 }
 
-func TestUnitAlicloudCmsEventRule(t *testing.T) {
+func TestUnitAliCloudCloudMonitorServiceEventRule(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_cms_event_rule"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_cms_event_rule"].Schema).Data(nil, nil)
@@ -357,7 +686,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudCmsEventRuleCreate(dInit, rawClient)
+	err = resourceAliCloudCloudMonitorServiceEventRuleCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff := map[string]interface{}{}
@@ -380,7 +709,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCmsEventRuleCreate(dInit, rawClient)
+		err := resourceAliCloudCloudMonitorServiceEventRuleCreate(dInit, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -407,7 +736,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudCmsEventRuleUpdate(dExisted, rawClient)
+	err = resourceAliCloudCloudMonitorServiceEventRuleUpdate(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff := map[string]interface{}{
@@ -476,7 +805,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCmsEventRuleUpdate(dExisted, rawClient)
+		err := resourceAliCloudCloudMonitorServiceEventRuleUpdate(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -520,7 +849,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCmsEventRuleRead(dExisted, rawClient)
+		err := resourceAliCloudCloudMonitorServiceEventRuleRead(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -539,7 +868,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudCmsEventRuleDelete(dExisted, rawClient)
+	err = resourceAliCloudCloudMonitorServiceEventRuleDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff = map[string]interface{}{}
@@ -567,7 +896,7 @@ func TestUnitAlicloudCmsEventRule(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCmsEventRuleDelete(dExisted, rawClient)
+		err := resourceAliCloudCloudMonitorServiceEventRuleDelete(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":

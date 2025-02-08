@@ -2,10 +2,10 @@ package alicloud
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
@@ -16,19 +16,14 @@ type MseService struct {
 
 func (s *MseService) DescribeMseCluster(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewMseClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "QueryClusterDetail"
 	request := map[string]interface{}{
 		"RegionId":   s.client.RegionId,
 		"InstanceId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	request["ClientToken"] = buildClientToken("QueryClusterDetail")
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-05-31"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("mse", "2019-05-31", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"mse-200-021"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("MseCluster", id)), NotFoundMsg, ProviderERROR)
@@ -47,6 +42,122 @@ func (s *MseService) DescribeMseCluster(id string) (object map[string]interface{
 	}
 	object = v.(map[string]interface{})
 	return object, nil
+}
+
+func (s *MseService) GetInstanceIdBYClusterId(clusterId string) (object map[string]interface{}, err error) {
+	var response map[string]interface{}
+	client := s.client
+	action := "QueryClusterDetail"
+	request := map[string]interface{}{
+		"RegionId":  s.client.RegionId,
+		"ClusterId": clusterId,
+	}
+	request["ClientToken"] = buildClientToken("QueryClusterDetail")
+	response, err = client.RpcPost("mse", "2019-05-31", action, nil, request, true)
+	if err != nil {
+		if IsExpectedErrors(err, []string{"mse-200-021"}) {
+			err = WrapErrorf(Error(GetNotFoundMessage("MseCluster", clusterId)), NotFoundMsg, ProviderERROR)
+			return object, err
+		}
+		err = WrapErrorf(err, DefaultErrorMsg, clusterId, action, AlibabaCloudSdkGoERROR)
+		return object, err
+	}
+	if fmt.Sprint(response["Success"]) == "false" {
+		return object, WrapError(fmt.Errorf("%s failed, response: %v", action, response))
+	}
+	addDebug(action, response, request)
+	v, err := jsonpath.Get("$.Data", response)
+	if err != nil {
+		return object, WrapErrorf(err, FailedGetAttributeMsg, clusterId, "$.Data", response)
+	}
+	object = v.(map[string]interface{})
+	return object, nil
+}
+
+func (s *MseService) SetResourceTags(d *schema.ResourceData, resourceType string) error {
+	if d.HasChange("tags") {
+		var err error
+		var action string
+		client := s.client
+		var request map[string]interface{}
+		var response map[string]interface{}
+		query := make(map[string]interface{})
+
+		added, removed := parsingTags(d)
+		removedTagKeys := make([]string, 0)
+		for _, v := range removed {
+			if !ignoredTags(v, "") {
+				removedTagKeys = append(removedTagKeys, v)
+			}
+		}
+		if len(removedTagKeys) > 0 {
+			action = "UnTagResources"
+			request = make(map[string]interface{})
+			query = make(map[string]interface{})
+			request["ResourceId.1"] = d.Id()
+			request["RegionId"] = client.RegionId
+			for i, key := range removedTagKeys {
+				request[fmt.Sprintf("TagKey.%d", i+1)] = key
+			}
+
+			request["ResourceType"] = resourceType
+			wait := incrementalWait(3*time.Second, 5*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+				response, err = client.RpcPost("mse", "2019-05-31", action, query, request, false)
+
+				if err != nil {
+					if NeedRetry(err) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				addDebug(action, response, request)
+				return nil
+			})
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+
+		}
+
+		if len(added) > 0 {
+			action = "TagResources"
+			request = make(map[string]interface{})
+			query = make(map[string]interface{})
+			request["ResourceId.1"] = d.Id()
+			request["RegionId"] = client.RegionId
+			count := 1
+			for key, value := range added {
+				request[fmt.Sprintf("Tag.%d.Key", count)] = key
+				request[fmt.Sprintf("Tag.%d.Value", count)] = value
+				count++
+			}
+
+			request["ResourceType"] = resourceType
+			wait := incrementalWait(3*time.Second, 5*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+				response, err = client.RpcPost("mse", "2019-05-31", action, query, request, false)
+
+				if err != nil {
+					if NeedRetry(err) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				addDebug(action, response, request)
+				return nil
+			})
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+
+		}
+		d.SetPartial("tags")
+	}
+
+	return nil
 }
 
 func (s *MseService) MseClusterStateRefreshFunc(id string, failStates []string) resource.StateRefreshFunc {
@@ -71,19 +182,14 @@ func (s *MseService) MseClusterStateRefreshFunc(id string, failStates []string) 
 
 func (s *MseService) DescribeMseGateway(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewMseClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "GetGateway"
 	request := map[string]interface{}{
 		"GatewayUniqueId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -133,19 +239,14 @@ func (s *MseService) MseGatewayStateRefreshFunc(id string, failStates []string) 
 
 func (s *MseService) ListGatewaySlb(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewMseClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListGatewaySlb"
 	request := map[string]interface{}{
 		"GatewayUniqueId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -176,10 +277,7 @@ func (s *MseService) ListGatewaySlb(id string) (object map[string]interface{}, e
 
 func (s *MseService) DescribeMseZnode(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewMseClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "QueryZnodeDetail"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -190,11 +288,9 @@ func (s *MseService) DescribeMseZnode(id string) (object map[string]interface{},
 		"ClusterId": parts[0],
 		"Path":      parts[1],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -218,13 +314,52 @@ func (s *MseService) DescribeMseZnode(id string) (object map[string]interface{},
 	object = v.(map[string]interface{})
 	return object, nil
 }
-
-func (s *MseService) DescribeMseEngineNamespace(id string) (object map[string]interface{}, err error) {
+func (s *MseService) DescribeMseNacosConfig(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewMseClient()
+	client := s.client
+	parts, err := ParseResourceId(id, 4)
 	if err != nil {
 		return nil, WrapError(err)
 	}
+	action := "GetNacosConfig"
+	request := map[string]interface{}{
+		"InstanceId":  parts[0],
+		"NamespaceId": parts[1],
+		"DataId":      parts[2],
+		"Group":       parts[3],
+	}
+	response, err = client.RpcPost("mse", "2019-05-31", action, nil, request, true)
+	// For delete check
+	if IsExpectedErrors(err, []string{"InternalError"}) {
+		return object, WrapErrorf(Error(GetNotFoundMessage("MSE:MseNacosConfig", id)), NotFoundMsg, ProviderERROR)
+	}
+
+	if err != nil {
+		if IsExpectedErrors(err, []string{"mse-200-021"}) {
+			err = WrapErrorf(Error(GetNotFoundMessage("MseNacosConfig", id)), NotFoundMsg, ProviderERROR)
+			return object, err
+		}
+		err = WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+		return object, err
+	}
+	if fmt.Sprint(response["Success"]) == "false" {
+		return object, WrapError(fmt.Errorf("%s failed, response: %v", action, response))
+	}
+	addDebug(action, response, request)
+	v, err := jsonpath.Get("$.Configuration", response)
+	if err != nil {
+		if err.Error() == "unknown key Configuration" {
+			return object, WrapErrorf(Error(GetNotFoundMessage("MSE", id)), NotFoundWithResponse, response)
+		}
+		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Configuration", response)
+	}
+	object = v.(map[string]interface{})
+	return object, nil
+}
+
+func (s *MseService) DescribeMseEngineNamespace(id string) (object map[string]interface{}, err error) {
+	var response map[string]interface{}
+	client := s.client
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
 		err = WrapError(err)
@@ -232,14 +367,12 @@ func (s *MseService) DescribeMseEngineNamespace(id string) (object map[string]in
 	}
 	action := "ListEngineNamespaces"
 	request := map[string]interface{}{
-		"ClusterId": parts[0],
+		"InstanceId": parts[0],
 	}
 	idExist := false
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -250,7 +383,14 @@ func (s *MseService) DescribeMseEngineNamespace(id string) (object map[string]in
 		return nil
 	})
 	addDebug(action, response, request)
+	// There is an API bug while query an Instance deleted.
+	if IsExpectedErrors(err, []string{"InternalError"}) {
+		return object, WrapErrorf(Error(GetNotFoundMessage("MSE:EngineNamespace", id)), NotFoundMsg, ProviderERROR)
+	}
 	if err != nil {
+		if IsExpectedErrors(err, []string{"InvalidParameter"}) {
+			return object, WrapErrorf(Error(GetNotFoundMessage("MSE cluster", parts[0])), NotFoundMsg, "")
+		}
 		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 	}
 	if fmt.Sprint(response["Success"]) == "false" {

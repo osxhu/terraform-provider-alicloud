@@ -20,13 +20,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
 
-func TestAccAlicloudVpcPublicIpAddressPoolCidrBlock_basic0(t *testing.T) {
+func TestAccAliCloudVpcPublicIpAddressPoolCidrBlock_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_vpc_public_ip_address_pool_cidr_block.default"
 	checkoutSupportedRegions(t, true, connectivity.VPCPublicIpAddressPoolCidrBlockSupportRegions)
 	ra := resourceAttrInit(resourceId, resourceAlicloudVpcPublicIpAddressPoolCidrBlockMap)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcPublicIpAddressPoolCidrBlock")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -63,8 +63,52 @@ func TestAccAlicloudVpcPublicIpAddressPoolCidrBlock_basic0(t *testing.T) {
 	})
 }
 
+func TestAccAliCloudVpcPublicIpAddressPoolCidrBlock_basic1(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_public_ip_address_pool_cidr_block.default"
+	checkoutSupportedRegions(t, true, connectivity.VPCPublicIpAddressPoolCidrBlockSupportRegions)
+	ra := resourceAttrInit(resourceId, resourceAlicloudVpcPublicIpAddressPoolCidrBlockMap)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcPublicIpAddressPoolCidrBlock")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testAcc%sVpcPublicIpAddressPoolCidrBlock-name%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceAlicloudVpcPublicIpAddressPoolCidrBlockBasicDependence)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"public_ip_address_pool_id": "${alicloud_vpc_public_ip_address_pool.default.id}",
+					"cidr_mask":                 "25",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"public_ip_address_pool_id": CHECKSET,
+						"cidr_block":                CHECKSET,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"cidr_mask"},
+			},
+		},
+	})
+}
+
 var resourceAlicloudVpcPublicIpAddressPoolCidrBlockMap = map[string]string{
-	"status": CHECKSET,
+	"status":      CHECKSET,
+	"create_time": CHECKSET,
 }
 
 func resourceAlicloudVpcPublicIpAddressPoolCidrBlockBasicDependence(name string) string {
@@ -149,7 +193,7 @@ func TestUnitAlicloudVpcPublicIpAddressPoolCidrBlock(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcPublicIpAddressPoolCidrBlockCreate(dInit, rawClient)
+	err = resourceAliCloudVpcPublicIpAddressPoolCidrBlockCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff := map[string]interface{}{}
@@ -172,7 +216,7 @@ func TestUnitAlicloudVpcPublicIpAddressPoolCidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPublicIpAddressPoolCidrBlockCreate(dInit, rawClient)
+		err := resourceAliCloudVpcPublicIpAddressPoolCidrBlockCreate(dInit, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -217,7 +261,7 @@ func TestUnitAlicloudVpcPublicIpAddressPoolCidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPublicIpAddressPoolCidrBlockRead(dExisted, rawClient)
+		err := resourceAliCloudVpcPublicIpAddressPoolCidrBlockRead(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -236,7 +280,7 @@ func TestUnitAlicloudVpcPublicIpAddressPoolCidrBlock(t *testing.T) {
 			StatusCode: tea.Int(400),
 		}
 	})
-	err = resourceAlicloudVpcPublicIpAddressPoolCidrBlockDelete(dExisted, rawClient)
+	err = resourceAliCloudVpcPublicIpAddressPoolCidrBlockDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	attributesDiff = map[string]interface{}{}
@@ -264,7 +308,7 @@ func TestUnitAlicloudVpcPublicIpAddressPoolCidrBlock(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudVpcPublicIpAddressPoolCidrBlockDelete(dExisted, rawClient)
+		err := resourceAliCloudVpcPublicIpAddressPoolCidrBlockDelete(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":

@@ -2,8 +2,10 @@ package alicloud
 
 import (
 	"fmt"
+	"github.com/aliyun/credentials-go/credentials"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -52,7 +54,7 @@ var endpoints sync.Map
 // sharedClientForRegion returns a common AlicloudClient setup needed for the sweeper
 // functions for a give n region
 func sharedClientForRegion(region string) (interface{}, error) {
-	var accessKey, secretKey string
+	var accessKey, secretKey, securityToken string
 	if accessKey = os.Getenv("ALICLOUD_ACCESS_KEY"); accessKey == "" {
 		return nil, fmt.Errorf("empty ALICLOUD_ACCESS_KEY")
 	}
@@ -60,6 +62,8 @@ func sharedClientForRegion(region string) (interface{}, error) {
 	if secretKey = os.Getenv("ALICLOUD_SECRET_KEY"); secretKey == "" {
 		return nil, fmt.Errorf("empty ALICLOUD_SECRET_KEY")
 	}
+
+	securityToken = os.Getenv("ALICLOUD_SECURITY_TOKEN")
 
 	conf := connectivity.Config{
 		Region:    connectivity.Region(region),
@@ -69,9 +73,32 @@ func sharedClientForRegion(region string) (interface{}, error) {
 		Protocol:  "HTTPS",
 		Endpoints: &endpoints,
 	}
-	if accountId := os.Getenv("ALICLOUD_ACCOUNT_ID"); accountId != "" {
+	if securityToken != "" {
+		conf.SecurityToken = securityToken
+	}
+	accountId := os.Getenv("ALICLOUD_ACCOUNT_ID")
+	if accountId == "" {
+		accountId = os.Getenv("ALIBABA_CLOUD_ACCOUNT_ID")
+	}
+	if accountId != "" {
 		conf.AccountId = accountId
 	}
+	accountType := os.Getenv("ALICLOUD_ACCOUNT_TYPE")
+	if accountType == "" {
+		accountType = os.Getenv("ALIBABA_CLOUD_ACCOUNT_TYPE")
+	}
+	if accountType != "" {
+		conf.AccountType = accountType
+	}
+	credentialConfig := new(credentials.Config).SetType("access_key").SetAccessKeyId(accessKey).SetAccessKeySecret(secretKey)
+	if v := strings.TrimSpace(securityToken); v != "" {
+		credentialConfig.SetType("sts").SetSecurityToken(v)
+	}
+	credential, err := credentials.NewCredential(credentialConfig)
+	if err != nil {
+		return nil, err
+	}
+	conf.Credential = credential
 
 	// configures a default client for the region, using the above env vars
 	client, err := conf.Client()
@@ -80,4 +107,8 @@ func sharedClientForRegion(region string) (interface{}, error) {
 	}
 
 	return client, nil
+}
+
+func sweepAll() bool {
+	return os.Getenv("ALICLOUD_SWEEP_ALL_RESOURCES") == "true"
 }

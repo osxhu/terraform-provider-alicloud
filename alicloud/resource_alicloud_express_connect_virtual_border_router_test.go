@@ -49,10 +49,6 @@ func testSweepExpressConnectVirtualBorderRouters(region string) error {
 	request["RegionId"] = client.RegionId
 	request["PageSize"] = PageSizeLarge
 	request["PageNumber"] = 1
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	var response interface{}
 	for {
 		action := "DescribeVirtualBorderRouters"
@@ -60,7 +56,7 @@ func testSweepExpressConnectVirtualBorderRouters(region string) error {
 		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -85,15 +81,17 @@ func testSweepExpressConnectVirtualBorderRouters(region string) error {
 			vbrName := fmt.Sprint(item["Name"])
 			vbrId := fmt.Sprint(item["VbrId"])
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(vbrName), strings.ToLower(prefix)) {
-					skip = false
-					break
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(vbrName), strings.ToLower(prefix)) {
+						skip = false
+						break
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping VirtualBorderRouter: %s (%s)", vbrName, vbrId)
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping VirtualBorderRouter: %s (%s)", vbrName, vbrId)
+					continue
+				}
 			}
 			action = "DeleteVirtualBorderRouter"
 			request := map[string]interface{}{
@@ -105,7 +103,7 @@ func testSweepExpressConnectVirtualBorderRouters(region string) error {
 			runtime.SetAutoretry(true)
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-				_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+				_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) || IsExpectedErrors(err, []string{"DependencyViolation.BgpGroup"}) {
 						wait()
@@ -127,14 +125,14 @@ func testSweepExpressConnectVirtualBorderRouters(region string) error {
 	return nil
 }
 
-func TestAccAlicloudExpressConnectVirtualBorderRouter_basic0(t *testing.T) {
+func TestAccAliCloudExpressConnectVirtualBorderRouter_basic0(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.VbrSupportRegions)
 	var v map[string]interface{}
 	resourceId := "alicloud_express_connect_virtual_border_router.default"
 	ra := resourceAttrInit(resourceId, AlicloudExpressConnectVirtualBorderRouterMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeExpressConnectVirtualBorderRouter")
+	}, "DescribeExpressConnectVirtualBorderRouter", []string{"include_cross_account_vbr"}...)
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(1, 2999)
@@ -158,6 +156,7 @@ func TestAccAlicloudExpressConnectVirtualBorderRouter_basic0(t *testing.T) {
 					"virtual_border_router_name": "tf-testAcc-PrT1AqAjKvGgLQpbygetjH6f",
 					"description":                "tf-testAcc-llZJhorzazsS81mf2PVyFEAA",
 					"bandwidth":                  "100",
+					"include_cross_account_vbr":  false,
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -389,7 +388,7 @@ func TestAccAlicloudExpressConnectVirtualBorderRouter_basic0(t *testing.T) {
 			{
 				ResourceName:      resourceId,
 				ImportState:       true,
-				ImportStateVerify: true, ImportStateVerifyIgnore: []string{"vbr_owner_id", "bandwidth"},
+				ImportStateVerify: true, ImportStateVerifyIgnore: []string{"vbr_owner_id", "bandwidth", "include_cross_account_vbr"},
 			},
 		},
 	})

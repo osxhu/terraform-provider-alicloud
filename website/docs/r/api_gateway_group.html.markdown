@@ -11,7 +11,9 @@ description: |-
 
 Provides an api group resource.To create an API, you must firstly create a group which is a basic attribute of the API.
 
-For information about Api Gateway Group and how to use it, see [Create An Api Group](https://www.alibabacloud.com/help/doc-detail/43611.html)
+For information about Api Gateway Group and how to use it, see [Create An Api Group](https://www.alibabacloud.com/help/en/api-gateway/latest/api-cloudapi-2016-07-14-createapigroup)
+
+-> **NOTE:** Available since v1.19.0.
 
 -> **NOTE:** Terraform will auto build api group while it uses `alicloud_api_gateway_group` to build api group.
 
@@ -19,10 +21,17 @@ For information about Api Gateway Group and how to use it, see [Create An Api Gr
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_api_gateway_group&exampleId=ff7858f8-9d2d-c61b-0ca0-ee35e84a1d6bcf60cf3a&activeTab=example&spm=docs.r.api_gateway_group.0.ff7858f89d&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-resource "alicloud_api_gateway_group" "apiGroup" {
-  name        = "ApiGatewayGroup"
-  description = "description of the api group"
+resource "alicloud_api_gateway_group" "default" {
+  name        = "tf_example"
+  description = "tf_example"
+  base_path   = "/"
 }
 ```
 ## Argument Reference
@@ -30,8 +39,9 @@ resource "alicloud_api_gateway_group" "apiGroup" {
 The following arguments are supported:
 
 * `name` - (Required) The name of the api gateway group. Defaults to null.
-* `description` - (Required) The description of the api gateway group. Defaults to null.
-* `instance_id` - (Optional, Computed, ForceNew, Available in 1.179.0+)	The id of the api gateway.
+* `description` - (Optional) The description of the api gateway group. Defaults to null.
+* `instance_id` - (Optional, ForceNew, Available in 1.179.0+)	The id of the api gateway.
+* `base_path` - (Optional, Computed, Available since v1.228.0) The base path of the api gateway group. Defaults to `/`.
 
 ## Attributes Reference
 

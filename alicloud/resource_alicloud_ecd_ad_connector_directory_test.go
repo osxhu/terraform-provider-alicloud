@@ -39,7 +39,7 @@ func testSweepEcdAdConnectorDirectory(region string) error {
 
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return fmt.Errorf("error getting Alicloud client: %s", err)
+		return fmt.Errorf("error getting AliCloud client: %s", err)
 	}
 	aliyunClient := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
@@ -52,17 +52,10 @@ func testSweepEcdAdConnectorDirectory(region string) error {
 	request["MaxResults"] = PageSizeLarge
 	request["DirectoryType"] = "AD_CONNECTOR"
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewGwsecdClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-30"), StringPointer("AK"), nil, request, &runtime)
+			response, err = aliyunClient.RpcPost("ecd", "2020-09-30", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -102,7 +95,7 @@ func testSweepEcdAdConnectorDirectory(region string) error {
 				"DirectoryId": []string{fmt.Sprint(item["DirectoryId"])},
 				"RegionId":    aliyunClient.RegionId,
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-30"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = aliyunClient.RpcPost("ecd", "2020-09-30", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Ecd Ad Connector Directory (%s): %s", item["Name"].(string), err)
 			}
@@ -117,11 +110,11 @@ func testSweepEcdAdConnectorDirectory(region string) error {
 	return nil
 }
 
-func TestAccAlicloudECDAdConnectorDirectory_basic0(t *testing.T) {
+func TestAccAliCloudECDAdConnectorDirectory_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ecd_ad_connector_directory.default"
 	checkoutSupportedRegions(t, true, connectivity.EcdSupportRegions)
-	ra := resourceAttrInit(resourceId, AlicloudECDAdConnectorDirectoryMap0)
+	ra := resourceAttrInit(resourceId, AliCloudECDAdConnectorDirectoryMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &EcdService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeEcdAdConnectorDirectory")
@@ -129,7 +122,7 @@ func TestAccAlicloudECDAdConnectorDirectory_basic0(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%secdadconnectordirectory%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudECDAdConnectorDirectoryBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudECDAdConnectorDirectoryBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -140,16 +133,16 @@ func TestAccAlicloudECDAdConnectorDirectory_basic0(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"domain_name":      "corp.example.com",
-					"vswitch_ids":      []string{"${data.alicloud_vswitches.default.ids.0}"},
+					"domain_name":      fmt.Sprintf("corp.%d.example.com", rand),
+					"vswitch_ids":      []string{"${alicloud_vswitch.default.id}"},
 					"dns_address":      []string{"127.0.0.2"},
 					"domain_password":  "YourPassword1234",
 					"domain_user_name": "sAMAccountName",
-					"directory_name":   "${var.name}",
+					"directory_name":   name,
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"domain_name":      "corp.example.com",
+						"domain_name":      CHECKSET,
 						"vswitch_ids.#":    "1",
 						"dns_address.#":    "1",
 						"domain_user_name": "sAMAccountName",
@@ -167,11 +160,11 @@ func TestAccAlicloudECDAdConnectorDirectory_basic0(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudECDAdConnectorDirectory_basic1(t *testing.T) {
+func TestAccAliCloudECDAdConnectorDirectory_basic1(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ecd_ad_connector_directory.default"
 	checkoutSupportedRegions(t, true, connectivity.EcdSupportRegions)
-	ra := resourceAttrInit(resourceId, AlicloudECDAdConnectorDirectoryMap0)
+	ra := resourceAttrInit(resourceId, AliCloudECDAdConnectorDirectoryMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &EcdService{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeEcdAdConnectorDirectory")
@@ -179,7 +172,7 @@ func TestAccAlicloudECDAdConnectorDirectory_basic1(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%secdadconnectordirectory%d", defaultRegionToTest, rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudECDAdConnectorDirectoryBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudECDAdConnectorDirectoryBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -190,13 +183,13 @@ func TestAccAlicloudECDAdConnectorDirectory_basic1(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"domain_name":            "corp.example.com",
-					"vswitch_ids":            []string{"${data.alicloud_vswitches.default.ids.0}"},
+					"domain_name":            fmt.Sprintf("corp.%d.example.com", rand),
+					"vswitch_ids":            []string{"${alicloud_vswitch.default.id}"},
 					"dns_address":            []string{"127.0.0.2"},
 					"desktop_access_type":    "INTERNET",
 					"domain_password":        "YourPassword1234",
 					"domain_user_name":       "sAMAccountName",
-					"directory_name":         "${var.name}",
+					"directory_name":         name,
 					"specification":          "1",
 					"sub_domain_dns_address": []string{"127.0.0.3"},
 					"sub_domain_name":        "child.example.com",
@@ -205,7 +198,7 @@ func TestAccAlicloudECDAdConnectorDirectory_basic1(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"domain_name":              "corp.example.com",
+						"domain_name":              CHECKSET,
 						"vswitch_ids.#":            "1",
 						"dns_address.#":            "1",
 						"desktop_access_type":      "INTERNET",
@@ -228,29 +221,33 @@ func TestAccAlicloudECDAdConnectorDirectory_basic1(t *testing.T) {
 	})
 }
 
-var AlicloudECDAdConnectorDirectoryMap0 = map[string]string{
+var AliCloudECDAdConnectorDirectoryMap0 = map[string]string{
 	"dns_address.#": CHECKSET,
 	"status":        CHECKSET,
 	"vswitch_ids.#": CHECKSET,
 }
 
-func AlicloudECDAdConnectorDirectoryBasicDependence0(name string) string {
+func AliCloudECDAdConnectorDirectoryBasicDependence0(name string) string {
 	return fmt.Sprintf(` 
-variable "name" {
-  default = "%s"
-}
-data "alicloud_ecd_zones" "default" {}
-data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
-}
-data "alicloud_vswitches" "default" {
-  vpc_id  = data.alicloud_vpcs.default.ids.0
-  zone_id = data.alicloud_ecd_zones.default.ids.0
-}
+	variable "name" {
+  		default = "%s"
+	}
+
+	resource "alicloud_vpc" "default" {
+  		vpc_name   = var.name
+  		cidr_block = "10.4.0.0/16"
+	}
+
+	resource "alicloud_vswitch" "default" {
+  		vswitch_name = var.name
+  		cidr_block   = "10.4.0.0/16"
+  		vpc_id       = alicloud_vpc.default.id
+  		zone_id      = "cn-hangzhou-j"
+	}
 `, name)
 }
 
-func TestUnitAlicloudECDAdConnectorDirectory(t *testing.T) {
+func TestUnitAliCloudECDAdConnectorDirectory(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_ecd_ad_connector_directory"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_ecd_ad_connector_directory"].Schema).Data(nil, nil)
