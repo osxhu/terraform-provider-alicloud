@@ -51,16 +51,10 @@ func testSweepVPCTrafficMirrorFilter(region string) error {
 	request["RegionId"] = client.RegionId
 
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -84,23 +78,24 @@ func testSweepVPCTrafficMirrorFilter(region string) error {
 		result, _ := resp.([]interface{})
 		for _, v := range result {
 			item := v.(map[string]interface{})
-
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(item["TrafficMirrorFilterName"].(string)), strings.ToLower(prefix)) {
-					skip = false
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(item["TrafficMirrorFilterName"].(string)), strings.ToLower(prefix)) {
+						skip = false
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping VPC Traffic Mirror Filter: %s", item["TrafficMirrorFilterName"].(string))
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping VPC Traffic Mirror Filter: %s", item["TrafficMirrorFilterName"].(string))
+					continue
+				}
 			}
 			action := "DeleteTrafficMirrorFilter"
 			request := map[string]interface{}{
 				"TrafficMirrorFilterId": item["TrafficMirrorFilterId"],
 			}
 			request["RegionId"] = client.RegionId
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete VPC Traffic Mirror Filter (%s): %s", item["TrafficMirrorFilterName"].(string), err)
 			}
@@ -121,7 +116,7 @@ func TestAccAlicloudVPCTrafficMirrorFilter_basic0(t *testing.T) {
 	resourceId := "alicloud_vpc_traffic_mirror_filter.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCTrafficMirrorFilterMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcTrafficMirrorFilter")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -196,7 +191,7 @@ func TestAccAlicloudVPCTrafficMirrorFilter_basic1(t *testing.T) {
 	resourceId := "alicloud_vpc_traffic_mirror_filter.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCTrafficMirrorFilterMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcTrafficMirrorFilter")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -344,7 +339,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 				StatusCode: tea.Int(400),
 			}
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterCreate(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterCreate(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -362,7 +357,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["CreateNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterCreate(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterCreate(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -380,7 +375,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["CreateNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterCreate(dCreate, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterCreate(dCreate, rawClient)
 		patches.Reset()
 		assert.Nil(t, err)
 	})
@@ -399,7 +394,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 		})
 
-		err := resourceAlicloudVpcTrafficMirrorFilterUpdate(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterUpdate(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -434,7 +429,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["UpdateNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterUpdate(resourceData1, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterUpdate(resourceData1, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -469,7 +464,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["UpdateNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterUpdate(resourceData1, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterUpdate(resourceData1, rawClient)
 		patches.Reset()
 		assert.Nil(t, err)
 	})
@@ -484,7 +479,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 				StatusCode: tea.Int(400),
 			}
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterDelete(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterDelete(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -502,7 +497,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["DeleteNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterDelete(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterDelete(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -519,7 +514,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["DeleteNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterDelete(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterDelete(d, rawClient)
 		patches.Reset()
 		assert.Nil(t, err)
 	})
@@ -537,7 +532,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["DeleteNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterDelete(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterDelete(d, rawClient)
 		patches.Reset()
 		assert.NotNil(t, err)
 	})
@@ -553,7 +548,7 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["ReadNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterRead(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterRead(d, rawClient)
 		patcheDorequest.Reset()
 		assert.Nil(t, err)
 	})
@@ -570,9 +565,284 @@ func TestUnitAlicloudVPCTrafficMirrorFilter(t *testing.T) {
 			}
 			return responseMock["ReadNormal"]("")
 		})
-		err := resourceAlicloudVpcTrafficMirrorFilterRead(d, rawClient)
+		err := resourceAliCloudVpcTrafficMirrorFilterRead(d, rawClient)
 		patcheDorequest.Reset()
 		assert.NotNil(t, err)
 	})
 
 }
+
+// Test Vpc TrafficMirrorFilter. >>> Resource test cases, automatically generated.
+// Case 3269
+func TestAccAlicloudVpcTrafficMirrorFilter_basic3269(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_traffic_mirror_filter.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcTrafficMirrorFilterMap3269)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcTrafficMirrorFilter")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpctrafficmirrorfilter%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcTrafficMirrorFilterBasicDependence3269)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_description": "test",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_description": "test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.default3iXhoa.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_description": "testupdate",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_description": "testupdate",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_name": name + "_update",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_name": name + "_update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.defaultdNz2qk.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_description": "test",
+					"traffic_mirror_filter_name":        name + "_update",
+					"resource_group_id":                 "${alicloud_resource_manager_resource_group.default3iXhoa.id}",
+					"egress_rules": []map[string]interface{}{
+						{
+							"priority":               "1",
+							"protocol":               "TCP",
+							"action":                 "accept",
+							"destination_cidr_block": "32.0.0.0/4",
+							"destination_port_range": "80/80",
+							"source_cidr_block":      "16.0.0.0/4",
+							"source_port_range":      "80/80",
+						},
+					},
+					"ingress_rules": []map[string]interface{}{
+						{
+							"priority":               "1",
+							"protocol":               "TCP",
+							"action":                 "accept",
+							"destination_cidr_block": "10.64.0.0/10",
+							"destination_port_range": "80/80",
+							"source_cidr_block":      "10.0.0.0/8",
+							"source_port_range":      "80/80",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_description": "test",
+						"traffic_mirror_filter_name":        name + "_update",
+						"resource_group_id":                 CHECKSET,
+						"egress_rules.#":                    "1",
+						"ingress_rules.#":                   "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run"},
+			},
+		},
+	})
+}
+
+var AlicloudVpcTrafficMirrorFilterMap3269 = map[string]string{
+	"status":            CHECKSET,
+	"resource_group_id": CHECKSET,
+}
+
+func AlicloudVpcTrafficMirrorFilterBasicDependence3269(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+resource "alicloud_resource_manager_resource_group" "default3iXhoa" {
+  display_name        = "testname03"
+  resource_group_name = var.name
+}
+
+resource "alicloud_resource_manager_resource_group" "defaultdNz2qk" {
+  display_name        = "testname04"
+  resource_group_name = "${var.name}1"
+}
+
+
+`, name)
+}
+
+// Case 3269  twin
+func TestAccAlicloudVpcTrafficMirrorFilter_basic3269_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_traffic_mirror_filter.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcTrafficMirrorFilterMap3269)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcTrafficMirrorFilter")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpctrafficmirrorfilter%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcTrafficMirrorFilterBasicDependence3269)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"traffic_mirror_filter_description": "testupdate",
+					"traffic_mirror_filter_name":        name,
+					"resource_group_id":                 "${alicloud_resource_manager_resource_group.defaultdNz2qk.id}",
+					"egress_rules": []map[string]interface{}{
+						{
+							"priority":               "1",
+							"protocol":               "TCP",
+							"action":                 "accept",
+							"destination_cidr_block": "32.0.0.0/4",
+							"destination_port_range": "80/80",
+							"source_cidr_block":      "16.0.0.0/4",
+							"source_port_range":      "80/80",
+						},
+					},
+					"ingress_rules": []map[string]interface{}{
+						{
+							"priority":               "1",
+							"protocol":               "TCP",
+							"action":                 "accept",
+							"destination_cidr_block": "10.64.0.0/10",
+							"destination_port_range": "80/80",
+							"source_cidr_block":      "10.0.0.0/8",
+							"source_port_range":      "80/80",
+						},
+					},
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"traffic_mirror_filter_description": "testupdate",
+						"traffic_mirror_filter_name":        name,
+						"resource_group_id":                 CHECKSET,
+						"egress_rules.#":                    "1",
+						"ingress_rules.#":                   "1",
+						"tags.%":                            "2",
+						"tags.Created":                      "TF",
+						"tags.For":                          "Test",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run"},
+			},
+		},
+	})
+}
+
+// Test Vpc TrafficMirrorFilter. <<< Resource test cases, automatically generated.

@@ -1,5 +1,5 @@
 ---
-subcategory: "Network Attached Storage (NAS)"
+subcategory: "File Storage (NAS)"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_nas_smb_acl_attachment"
 sidebar_current: "docs-alicloud-resource-nas-smb-acl-attachment"
@@ -18,20 +18,31 @@ Alibaba Cloud SMB protocol file storage service supports user authentication bas
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_nas_smb_acl_attachment&exampleId=ac126602-e234-c0e4-c3d0-ae14095df14e111f001a&activeTab=example&spm=docs.r.nas_smb_acl_attachment.0.ac126602e2&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+data "alicloud_nas_zones" "example" {
+  file_system_type = "standard"
+}
+
 resource "alicloud_nas_file_system" "example" {
   protocol_type    = "SMB"
-  storage_type     = "Performance"
+  storage_type     = "Capacity"
+  description      = "terraform-example"
+  encrypt_type     = "0"
   file_system_type = "standard"
-  zone_id          = "cn-hangzhou-g"
+  zone_id          = data.alicloud_nas_zones.example.zones[0].zone_id
 }
 
 resource "alicloud_nas_smb_acl_attachment" "example" {
   file_system_id = alicloud_nas_file_system.example.id
-  keytab         = "BQIAAABHAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAAQAIqIx6v7p11oUAAABHAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAAwAIqIx6v7p11oUAAABPAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAFwAQnQZWB3RAPHU7PMIJyBWePAAAAF8AAgANQUxJQURURVNULkNPTQAEY2lmcwAZc21ic2VydmVyMjQuYWxpYWR0ZXN0LmNvbQAAAAEAAAAAAQASACAGJ7F0s+bcBjf6jD5HlvlRLmPSOW+qDZe0Qk0lQcf8WwAAAE8AAgANQUxJQURURVNULkNPTQAEY2lmcwAZc21ic2VydmVyMjQuYWxpYWR0ZXN0LmNvbQAAAAEAAAAAAQARABDdFmanrSIatnDDhxxxxx"
-  keytab_md5     = "E3CCF7E2416DF04FA958AA4513*****"
+  keytab         = "BQIAAABHAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAAQAIqIx6v7p11oUAAABHAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAAwAIqIx6v7p11oUAAABPAAIADUFMSUFEVEVTVC5DT00ABGNpZnMAGXNtYnNlcnZlcjI0LmFsaWFkdGVzdC5jb20AAAABAAAAAAEAFwAQnQZWB3RAPHU7PMIJyBWePAAAAF8AAgANQUxJQURURVNULkNPTQAEY2lmcwAZc21ic2VydmVyMjQuYWxpYWR0ZXN0LmNvbQAAAAEAAAAAAQASACAGJ7F0s+bcBjf6jD5HlvlRLmPSOW+qDZe0Qk0lQcf8WwAAAE8AAgANQUxJQURURVNULkNPTQAEY2lmcwAZc21ic2VydmVyMjQuYWxpYWR0ZXN0LmNvbQAAAAEAAAAAAQARABDdFmanrSIatnDDhoOXYadj"
+  keytab_md5     = "E3CCF7E2416DF04FA958AA4513EA29E8"
 }
-
 ```
 
 ## Argument Reference

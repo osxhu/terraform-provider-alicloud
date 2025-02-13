@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ddosbgp"
@@ -99,7 +98,6 @@ func dataSourceAlicloudDdosbgpInstancesRead(d *schema.ResourceData, meta interfa
 	request.PageSize = requests.Integer(strconv.Itoa(PageSizeLarge))
 	request.PageNo = "1"
 	request.RegionId = client.RegionId
-	request.DdosRegionId = client.RegionId
 	var instances []ddosbgp.Instance
 
 	var nameRegex *regexp.Regexp
@@ -153,10 +151,10 @@ func dataSourceAlicloudDdosbgpInstancesRead(d *schema.ResourceData, meta interfa
 	}
 
 	// describe instance spec filtered by instanceids
-	var nameMap map[string]string = make(map[string]string)
-	var instanceIds []string
-	var ipTypeMap map[string]string = make(map[string]string)
-	var instanceTypeMap map[string]string = make(map[string]string)
+	nameMap := make(map[string]string)
+	instanceIds := make([]string, 0)
+	ipTypeMap := make(map[string]string)
+	instanceTypeMap := make(map[string]string)
 	for _, instance := range instances {
 		instanceIds = append(instanceIds, instance.InstanceId)
 		nameMap[instance.InstanceId] = instance.Remark
@@ -177,15 +175,10 @@ func dataSourceAlicloudDdosbgpInstancesRead(d *schema.ResourceData, meta interfa
 	}
 
 	var response map[string]interface{}
-	conn, err := client.NewDdosbgpClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var err error
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(6*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-07-20"), StringPointer("AK"), nil, describeInstanceSpecsRequest, &runtime)
+		response, err = client.RpcPost("ddosbgp", "2018-07-20", action, nil, describeInstanceSpecsRequest, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

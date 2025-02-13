@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -74,16 +73,12 @@ func resourceAlicloudCenTransitRouterRouteEntry() *schema.Resource {
 }
 
 func resourceAlicloudCenTransitRouterRouteEntryCreate(d *schema.ResourceData, meta interface{}) error {
-	time.Sleep(60 * time.Second)
 	client := meta.(*connectivity.AliyunClient)
 	cbnService := CbnService{client}
 	var response map[string]interface{}
 	action := "CreateTransitRouterRouteEntry"
 	request := make(map[string]interface{})
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOkExists("dry_run"); ok {
 		request["DryRun"] = v
 	}
@@ -104,14 +99,17 @@ func resourceAlicloudCenTransitRouterRouteEntryCreate(d *schema.ResourceData, me
 	request["TransitRouterRouteEntryNextHopType"] = d.Get("transit_router_route_entry_next_hop_type")
 	request["TransitRouterRouteTableId"] = d.Get("transit_router_route_table_id")
 	request["ClientToken"] = buildClientToken("CreateTransitRouterRouteEntry")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
+	shortWait := incrementalWait(1*time.Second, 0*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
-			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status", "InstanceStatus.NotSupport"}) || NeedRetry(err) {
 				wait()
+				return resource.RetryableError(err)
+			}
+			if IsExpectedErrors(err, []string{"OperationFailed.CreateRouteEntryWithSameDestinationCidrBlock"}) {
+				shortWait()
 				return resource.RetryableError(err)
 			}
 			return resource.NonRetryableError(err)
@@ -124,13 +122,15 @@ func resourceAlicloudCenTransitRouterRouteEntryCreate(d *schema.ResourceData, me
 	}
 
 	d.SetId(fmt.Sprintf("%v:%v", request["TransitRouterRouteTableId"], response["TransitRouterRouteEntryId"]))
-	stateConf := BuildStateConf([]string{}, []string{"Active"}, d.Timeout(schema.TimeoutCreate), 5*time.Second, cbnService.CenTransitRouterRouteEntryStateRefreshFunc(d.Id(), []string{}))
+	stateConf := BuildStateConf([]string{}, []string{"Active"}, d.Timeout(schema.TimeoutCreate), 1*time.Second, cbnService.CenTransitRouterRouteEntryStateRefreshFunc(d.Id(), []string{}))
+	stateConf.PollInterval = 1 * time.Second
 	if _, err := stateConf.WaitForState(); err != nil {
 		return WrapErrorf(err, IdMsg, d.Id())
 	}
 
 	return resourceAlicloudCenTransitRouterRouteEntryRead(d, meta)
 }
+
 func resourceAlicloudCenTransitRouterRouteEntryRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	cbnService := CbnService{client}
@@ -157,10 +157,12 @@ func resourceAlicloudCenTransitRouterRouteEntryRead(d *schema.ResourceData, meta
 	d.Set("transit_router_route_table_id", parts[0])
 	return nil
 }
+
 func resourceAlicloudCenTransitRouterRouteEntryUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	cbnService := CbnService{client}
 	var response map[string]interface{}
+	var err error
 	parts, err1 := ParseResourceId(d.Id(), 2)
 	if err1 != nil {
 		return WrapError(err1)
@@ -182,16 +184,10 @@ func resourceAlicloudCenTransitRouterRouteEntryUpdate(d *schema.ResourceData, me
 			request["DryRun"] = d.Get("dry_run")
 		}
 		action := "UpdateTransitRouterRouteEntry"
-		conn, err := client.NewCbnClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		request["ClientToken"] = buildClientToken("UpdateTransitRouterRouteEntry")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
 					wait()
@@ -212,14 +208,13 @@ func resourceAlicloudCenTransitRouterRouteEntryUpdate(d *schema.ResourceData, me
 	}
 	return resourceAlicloudCenTransitRouterRouteEntryRead(d, meta)
 }
+
 func resourceAlicloudCenTransitRouterRouteEntryDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
+	cbnService := CbnService{client}
 	action := "DeleteTransitRouterRouteEntry"
 	var response map[string]interface{}
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	parts, err1 := ParseResourceId(d.Id(), 2)
 	if err1 != nil {
 		return WrapError(err1)
@@ -236,13 +231,11 @@ func resourceAlicloudCenTransitRouterRouteEntryDelete(d *schema.ResourceData, me
 	}
 	request["TransitRouterRouteEntryNextHopType"] = d.Get("transit_router_route_entry_next_hop_type")
 	request["ClientToken"] = buildClientToken("DeleteTransitRouterRouteEntry")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
-			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status", "InstanceStatus.NotSupport"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -256,6 +249,10 @@ func resourceAlicloudCenTransitRouterRouteEntryDelete(d *schema.ResourceData, me
 			return nil
 		}
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+	}
+	stateConf := BuildStateConf([]string{}, []string{}, d.Timeout(schema.TimeoutDelete), 1*time.Second, cbnService.CenTransitRouterRouteEntryStateRefreshFunc(d.Id(), []string{}))
+	if _, err := stateConf.WaitForState(); err != nil {
+		return WrapErrorf(err, IdMsg, d.Id())
 	}
 	return nil
 }

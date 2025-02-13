@@ -1,10 +1,10 @@
 ---
-subcategory: "Cloud Architect Design Tools"
+subcategory: "Cloud Architect Design Tools (BPStudio)"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_bp_studio_application"
 sidebar_current: "docs-alicloud-resource-bp-studio-application"
 description: |-
-  Provides a Alicloud Cloud Architect Design Tools Application resource.
+  Provides a Alicloud Cloud Architect Design Tools (BPStudio) Application resource.
 ---
 
 # alicloud\_bp\_studio\_application
@@ -19,15 +19,36 @@ For information about Cloud Architect Design Tools Application and how to use it
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_bp_studio_application&exampleId=8c892a8d-2442-8ce4-72d0-7fde902dbace5557fe35&activeTab=example&spm=docs.r.bp_studio_application.0.8c892a8d24&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+provider "alicloud" {
+  region = "cn-hangzhou"
+}
+
+variable "name" {
+  default = "tf-example"
+}
+
+data "alicloud_resource_manager_resource_groups" "default" {
+}
+
+data "alicloud_instances" "default" {
+  status = "Running"
+}
+
 resource "alicloud_bp_studio_application" "default" {
-  application_name  = "example_value"
-  template_id       = "example_value"
-  resource_group_id = "example_value"
-  area_id           = "example_value"
+  application_name  = var.name
+  template_id       = "YAUUQIYRSV1CMFGX"
+  resource_group_id = data.alicloud_resource_manager_resource_groups.default.groups.0.id
+  area_id           = "cn-hangzhou"
   instances {
-    id        = "example_value"
-    node_name = "example_value"
+    id        = "data.alicloud_instances.default.instances.0.id"
+    node_name = "data.alicloud_instances.default.instances.0.name"
     node_type = "ecs"
   }
   configuration = {

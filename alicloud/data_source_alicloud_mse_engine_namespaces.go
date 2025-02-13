@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -20,12 +19,16 @@ func dataSourceAlicloudMseEngineNamespaces() *schema.Resource {
 			"accept_language": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ForceNew:     true,
 				ValidateFunc: validation.StringInSlice([]string{"zh", "en"}, false),
 			},
 			"cluster_id": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
+				ForceNew: true,
+			},
+			"instance_id": {
+				Type:     schema.TypeString,
+				Optional: true,
 				ForceNew: true,
 			},
 			"ids": {
@@ -92,6 +95,7 @@ func dataSourceAlicloudMseEngineNamespacesRead(d *schema.ResourceData, meta inte
 		request["AcceptLanguage"] = v
 	}
 	request["ClusterId"] = d.Get("cluster_id")
+	request["InstanceId"] = d.Get("instance_id")
 	var objects []map[string]interface{}
 
 	idsMap := make(map[string]string)
@@ -104,15 +108,10 @@ func dataSourceAlicloudMseEngineNamespacesRead(d *schema.ResourceData, meta inte
 		}
 	}
 	var response map[string]interface{}
-	conn, err := client.NewMseClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var err error
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -134,7 +133,7 @@ func dataSourceAlicloudMseEngineNamespacesRead(d *schema.ResourceData, meta inte
 	for _, v := range result {
 		item := v.(map[string]interface{})
 		if len(idsMap) > 0 {
-			if _, ok := idsMap[fmt.Sprint(request["ClusterId"], ":", item["Namespace"])]; !ok {
+			if _, ok := idsMap[fmt.Sprint(request["InstanceId"], ":", item["Namespace"])]; !ok {
 				continue
 			}
 		}
@@ -145,7 +144,7 @@ func dataSourceAlicloudMseEngineNamespacesRead(d *schema.ResourceData, meta inte
 	for _, object := range objects {
 		mapping := map[string]interface{}{
 			"config_count":        formatInt(object["ConfigCount"]),
-			"id":                  fmt.Sprint(request["ClusterId"], ":", object["Namespace"]),
+			"id":                  fmt.Sprint(request["InstanceId"], ":", object["Namespace"]),
 			"namespace_id":        fmt.Sprint(object["Namespace"]),
 			"namespace_desc":      object["NamespaceDesc"],
 			"namespace_show_name": object["NamespaceShowName"],

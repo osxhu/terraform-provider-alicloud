@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -39,21 +38,16 @@ func resourceAlicloudBrainIndustrialPidOrganizationCreate(d *schema.ResourceData
 	var response map[string]interface{}
 	action := "CreatePidOrganization"
 	request := make(map[string]interface{})
-	conn, err := client.NewAistudioClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("parent_pid_organization_id"); ok {
 		request["ParentOrganizationId"] = v
 	}
 
 	request["OrganizationName"] = d.Get("pid_organization_name")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	request["ClientToken"] = buildClientToken("CreatePidOrganization")
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-20"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("brain-industrial", "2020-09-20", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -68,9 +62,6 @@ func resourceAlicloudBrainIndustrialPidOrganizationCreate(d *schema.ResourceData
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_brain_industrial_pid_organization", action, AlibabaCloudSdkGoERROR)
 	}
 	addDebug(action, response, request)
-	if fmt.Sprintf(`%v`, response["Code"]) != "200" {
-		return WrapError(Error("CreatePidOrganization failed for " + response["Message"].(string)))
-	}
 
 	d.SetId(fmt.Sprint(response["OrganizationId"]))
 
@@ -94,19 +85,16 @@ func resourceAlicloudBrainIndustrialPidOrganizationRead(d *schema.ResourceData, 
 func resourceAlicloudBrainIndustrialPidOrganizationUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
+	var err error
 	if d.HasChange("pid_organization_name") {
 		request := map[string]interface{}{
 			"OrganizationId": d.Id(),
 		}
 		request["OrganizationName"] = d.Get("pid_organization_name")
 		action := "UpdatePidOrganization"
-		conn, err := client.NewAistudioClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("brain-industrial", "2020-09-20", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -120,9 +108,6 @@ func resourceAlicloudBrainIndustrialPidOrganizationUpdate(d *schema.ResourceData
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
-		if fmt.Sprintf(`%v`, response["Code"]) != "200" {
-			return WrapError(Error("UpdatePidOrganization failed for " + response["Message"].(string)))
-		}
 	}
 	return resourceAlicloudBrainIndustrialPidOrganizationRead(d, meta)
 }
@@ -130,17 +115,14 @@ func resourceAlicloudBrainIndustrialPidOrganizationDelete(d *schema.ResourceData
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeletePidOrganization"
 	var response map[string]interface{}
-	conn, err := client.NewAistudioClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"OrganizationId": d.Id(),
 	}
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-09-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("brain-industrial", "2020-09-20", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -153,9 +135,6 @@ func resourceAlicloudBrainIndustrialPidOrganizationDelete(d *schema.ResourceData
 	})
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
-	}
-	if fmt.Sprintf(`%v`, response["Code"]) != "200" {
-		return WrapError(Error("DeletePidOrganization failed for " + response["Message"].(string)))
 	}
 	return nil
 }

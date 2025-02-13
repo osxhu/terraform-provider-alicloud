@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -364,7 +363,7 @@ func resourceAlicloudRdsUpgradeDbInstance() *schema.Resource {
 func resourceAlicloudRdsUpgradeDbInstanceCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	rdsService := RdsService{client}
-	conn, err := client.NewRdsClient()
+	var err error
 	action := "UpgradeDBInstanceMajorVersionPrecheck"
 	request := map[string]interface{}{
 		"RegionId":     client.RegionId,
@@ -377,7 +376,7 @@ func resourceAlicloudRdsUpgradeDbInstanceCreate(d *schema.ResourceData, meta int
 	var response map[string]interface{}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -444,7 +443,7 @@ func resourceAlicloudRdsUpgradeDbInstanceCreate(d *schema.ResourceData, meta int
 	}
 	wait = incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) || IsExpectedErrors(err, OperationDeniedDBStatus) {
 				wait()
@@ -502,6 +501,7 @@ func resourceAlicloudRdsUpgradeDbInstanceRead(d *schema.ResourceData, meta inter
 	d.Set("port", object["Port"])
 	d.Set("connection_string", object["ConnectionString"])
 	d.Set("deletion_protection", object["DeletionProtection"])
+	d.Set("resource_group_id", object["ResourceGroupId"])
 
 	if err = rdsService.RefreshParameters(d, "parameters"); err != nil {
 		return WrapError(err)
@@ -568,8 +568,8 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	client := meta.(*connectivity.AliyunClient)
 	rdsService := RdsService{client}
 	var response map[string]interface{}
+	var err error
 	d.Partial(true)
-
 	if d.HasChange("deletion_protection") && d.Get("payment_type") == "PayAsYouGo" {
 		err := rdsService.ModifyDBInstanceDeletionProtection(d, "deletion_protection")
 		if err != nil {
@@ -605,16 +605,10 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	}
 	if update {
 		action := "ModifyDBInstanceAutoUpgradeMinorVersion"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		request["ClientToken"] = buildClientToken("ModifyDBInstanceAutoUpgradeMinorVersion")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -642,13 +636,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	}
 	if update {
 		action := "ModifyDBInstanceDescription"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceDescriptionReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceDescriptionReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -676,16 +666,10 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	}
 	if update {
 		action := "ModifyDBInstanceMaintainTime"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		request["ClientToken"] = buildClientToken("ModifyDBInstanceMaintainTime")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceMaintainTimeReq, &runtime)
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceMaintainTimeReq, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -719,13 +703,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 			modifyDBInstanceHAConfigReq["HAMode"] = v
 		}
 		action := "ModifyDBInstanceHAConfig"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceHAConfigReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceHAConfigReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -765,13 +745,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	}
 	if update {
 		action := "SwitchDBInstanceVpc"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, switchDBInstanceVpcReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, switchDBInstanceVpcReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -815,13 +791,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 			modifyDBInstanceConnectionStringReq["Port"] = v
 		}
 		action := "ModifyDBInstanceConnectionString"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceConnectionStringReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceConnectionStringReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -872,13 +844,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 			modifyDBInstanceTDEReq["RoleArn"] = v
 		}
 		action := "ModifyDBInstanceTDE"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceTDEReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceTDEReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -914,13 +882,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 	}
 	if update {
 		action := "ModifySecurityIps"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifySecurityIpsReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifySecurityIpsReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -1004,15 +968,17 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 			modifyDBInstanceSSLReq["SSLEnabled"] = v
 		}
 	}
+	instance, err := rdsService.DescribeDBInstance(d.Id())
+	if err != nil {
+		return WrapError(err)
+	}
+	// When upgrading to a larger version, SSL was immediately enabled. As no instance information was queried, there was no ConnectionString information available, so the queried ConnectionString was used
+	modifyDBInstanceSSLReq["ConnectionString"] = instance["ConnectionString"]
 	if update {
 		action := "ModifyDBInstanceSSL"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceSSLReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceSSLReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -1041,6 +1007,40 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 		d.SetPartial("server_key")
 		d.SetPartial("ssl_enabled")
 	}
+	if d.HasChange("resource_group_id") {
+		if v, ok := d.GetOk("resource_group_id"); ok {
+			action := "ModifyResourceGroup"
+			groupRequest := map[string]interface{}{
+				"DBInstanceId":    d.Id(),
+				"ResourceGroupId": v.(string),
+				"ClientToken":     buildClientToken(action),
+				"SourceIp":        client.SourceIp,
+			}
+			wait := incrementalWait(3*time.Second, 3*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+				response, err = client.RpcPost("Rds", "2014-08-15", action, nil, groupRequest, true)
+				if err != nil {
+					if NeedRetry(err) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				return nil
+			})
+
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+			addDebug(action, response, groupRequest)
+			stateConf := BuildStateConf([]string{}, []string{"Running"}, d.Timeout(schema.TimeoutUpdate), 0, rdsService.RdsDBInstanceStateRefreshFunc(d.Id(), []string{"Deleting"}))
+			if _, err := stateConf.WaitForState(); err != nil {
+				return WrapErrorf(err, IdMsg, d.Id())
+			}
+			d.SetPartial("resource_group_id")
+		}
+	}
+
 	update = false
 	modifyDBInstanceSpecReq := map[string]interface{}{
 		"DBInstanceId": d.Id(),
@@ -1092,9 +1092,6 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 		if v, ok := d.GetOk("effective_time"); ok {
 			modifyDBInstanceSpecReq["EffectiveTime"] = v
 		}
-		if v, ok := d.GetOk("resource_group_id"); ok {
-			modifyDBInstanceSpecReq["ResourceGroupId"] = v
-		}
 		if v, ok := d.GetOk("source_biz"); ok {
 			modifyDBInstanceSpecReq["SourceBiz"] = v
 		}
@@ -1102,13 +1099,9 @@ func resourceAlicloudRdsUpgradeDbInstanceUpdate(d *schema.ResourceData, meta int
 			modifyDBInstanceSpecReq["SwitchTime"] = v
 		}
 		action := "ModifyDBInstanceSpec"
-		conn, err := client.NewRdsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, modifyDBInstanceSpecReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, modifyDBInstanceSpecReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -1141,10 +1134,7 @@ func resourceAlicloudRdsUpgradeDbInstanceDelete(d *schema.ResourceData, meta int
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteDBInstance"
 	var response map[string]interface{}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"DBInstanceId": d.Id(),
 		"RegionId":     client.RegionId,
@@ -1155,7 +1145,7 @@ func resourceAlicloudRdsUpgradeDbInstanceDelete(d *schema.ResourceData, meta int
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

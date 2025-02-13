@@ -1,5 +1,5 @@
 ---
-subcategory: "VPN"
+subcategory: "VPN Gateway"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_vpn_gateway_vpn_attachment"
 sidebar_current: "docs-alicloud-resource-vpn-gateway-vpn-attachment"
@@ -7,24 +7,33 @@ description: |-
   Provides a Alicloud VPN Gateway Vpn Attachment resource.
 ---
 
-# alicloud\_vpn\_gateway\_vpn\_attachment
+# alicloud_vpn_gateway_vpn_attachment
 
 Provides a VPN Gateway Vpn Attachment resource.
 
 For information about VPN Gateway Vpn Attachment and how to use it, see [What is Vpn Attachment](https://www.alibabacloud.com/help/zh/virtual-private-cloud/latest/createvpnattachment).
 
--> **NOTE:** Available in v1.181.0+.
+-> **NOTE:** Available since v1.181.0.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_vpn_gateway_vpn_attachment&exampleId=9a5be41b-822c-c907-2cbc-eec5ba1487a364b8dd07&activeTab=example&spm=docs.r.vpn_gateway_vpn_attachment.0.9a5be41b82&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+variable "name" {
+  default = "tf-example"
+}
 resource "alicloud_vpn_customer_gateway" "default" {
-  name        = "${var.name}"
-  ip_address  = "42.104.22.210"
-  asn         = "45014"
-  description = "testAccVpnConnectionDesc"
+  customer_gateway_name = var.name
+  ip_address            = "42.104.22.210"
+  asn                   = "45014"
+  description           = var.name
 }
 resource "alicloud_vpn_gateway_vpn_attachment" "default" {
   customer_gateway_id = alicloud_vpn_customer_gateway.default.id
@@ -74,20 +83,20 @@ resource "alicloud_vpn_gateway_vpn_attachment" "default" {
 
 The following arguments are supported:
 
-* `bgp_config` - (Optional, Computed) Bgp configuration information. See the following `Block bgp_config`.
-* `customer_gateway_id` - (Required, ForceNew) The ID of the customer gateway.
+* `bgp_config` - (Optional) Bgp configuration information. See [`bgp_config`](#bgp_config) below.
+* `customer_gateway_id` - (Required,  Available since v1.196.0) The ID of the customer gateway. From version 1.196.0, `customer_gateway_id` can be modified.
 * `effect_immediately` - (Optional) Indicates whether IPsec-VPN negotiations are initiated immediately. Valid values.
-* `enable_dpd` - (Optional, Computed) Whether to enable the DPD (peer survival detection) function.
-* `enable_nat_traversal` - (Optional, Computed) Allow NAT penetration.
-* `health_check_config` - (Optional, Computed) Health check configuration information. See the following `Block health_check_config`.
-* `ike_config` - (Optional, Computed) Configuration negotiated in the second stage. See the following `Block ike_config`.
-* `ipsec_config` - (Optional, Computed) Configuration negotiated in the second stage. See the following `Block ipsec_config`.
+* `enable_dpd` - (Optional) Whether to enable the DPD (peer survival detection) function.
+* `enable_nat_traversal` - (Optional) Allow NAT penetration.
+* `health_check_config` - (Optional) Health check configuration information. See [`health_check_config`](#health_check_config) below.
+* `ike_config` - (Optional) Configuration negotiated in the second stage. See [`ike_config`](#ike_config) below.
+* `ipsec_config` - (Optional) Configuration negotiated in the second stage. See [`ipsec_config`](#ipsec_config) below.
 * `local_subnet` - (Required) The CIDR block of the virtual private cloud (VPC).
-* `network_type` - (Optional, Computed, ForceNew) The network type of the IPsec connection. Valid values: `public`, `private`.
+* `network_type` - (Optional, ForceNew) The network type of the IPsec connection. Valid values: `public`, `private`.
 * `remote_subnet` - (Required) The CIDR block of the on-premises data center.
 * `vpn_attachment_name` - (Optional) The name of the vpn attachment.
 
-#### Block ipsec_config
+### `ipsec_config`
 
 The ipsec_config supports the following: 
 
@@ -96,7 +105,7 @@ The ipsec_config supports the following:
 * `ipsec_lifetime` - (Optional) The SA lifecycle as the result of phase-two negotiation. The valid value is [0, 86400], the unit is second and the default value is 86400.
 * `ipsec_pfs` - (Optional) The Diffie-Hellman key exchange algorithm used by phase-two negotiation. Valid value: group1 | group2 | group5 | group14 | group24| disabled. Default value: group2
 
-#### Block ike_config
+### `ike_config`
 
 The ike_config supports the following: 
 
@@ -110,7 +119,7 @@ The ike_config supports the following:
 * `psk` - (Optional) Used for authentication between the IPsec VPN gateway and the customer gateway.
 * `remote_id` - (Optional) The peer ID, which supports FQDN and IP formats. By default, the IP address of the currently selected user gateway.
 
-#### Block health_check_config
+### `health_check_config`
 
 The health_check_config supports the following: 
 
@@ -121,14 +130,14 @@ The health_check_config supports the following:
 * `sip` - (Optional) The source IP address that is used for health checks.
 * `policy` - (Optional) Whether to revoke the published route when the health check fails. Valid values: `revoke_route` or `reserve_route`.
 
-#### Block bgp_config
+### `bgp_config`
 
 The bgp_config supports the following: 
 
-* `enable` - (Optional, Computed) Whether to enable BGP.
-* `local_asn` - (Optional, Computed) The ASN on the Alibaba Cloud side.
-* `tunnel_cidr` - (Optional, Computed) The CIDR block of the IPsec tunnel. The CIDR block belongs to 169.254.0.0/16. The mask of the CIDR block is 30 bits in length.
-* `local_bgp_ip` - (Optional, Computed)  The BGP IP address on the Alibaba Cloud side.
+* `enable` - (Optional) Whether to enable BGP.
+* `local_asn` - (Optional) The ASN on the Alibaba Cloud side.
+* `tunnel_cidr` - (Optional) The CIDR block of the IPsec tunnel. The CIDR block belongs to 169.254.0.0/16. The mask of the CIDR block is 30 bits in length.
+* `local_bgp_ip` - (Optional)  The BGP IP address on the Alibaba Cloud side.
 
 ## Attributes Reference
 
@@ -138,7 +147,7 @@ The following attributes are exported:
 * `status` - The status of the resource.
 * `internet_ip` - The VPN gateway IP.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

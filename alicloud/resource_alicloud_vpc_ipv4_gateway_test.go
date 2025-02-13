@@ -36,29 +36,22 @@ func testSweepVpcIpv4Gateway(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting Alicloud client: %s", err)
 	}
-	aliyunClient := rawClient.(*connectivity.AliyunClient)
+	client := rawClient.(*connectivity.AliyunClient)
 	prefixes := []string{
 		"tf-testAcc",
 		"tf_testAcc",
 	}
 	action := "ListIpv4Gateways"
 	request := map[string]interface{}{}
-	request["RegionId"] = aliyunClient.RegionId
+	request["RegionId"] = client.RegionId
 
 	request["MaxResults"] = PageSizeLarge
 
 	var response map[string]interface{}
-	conn, err := aliyunClient.NewVpcClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-		return nil
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -84,21 +77,23 @@ func testSweepVpcIpv4Gateway(region string) error {
 			item := v.(map[string]interface{})
 
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(item["Ipv4GatewayName"].(string)), strings.ToLower(prefix)) {
-					skip = false
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(item["Ipv4GatewayName"].(string)), strings.ToLower(prefix)) {
+						skip = false
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping Vpc Ipv4 Gateway: %s", item["Ipv4GatewayName"].(string))
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping Vpc Ipv4 Gateway: %s", item["Ipv4GatewayName"].(string))
+					continue
+				}
 			}
 			action := "DeleteIpv4Gateway"
 			request := map[string]interface{}{
 				"Ipv4GatewayId": item["Ipv4GatewayId"],
-				"RegionId":      aliyunClient.RegionId,
+				"RegionId":      client.RegionId,
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Vpc Ipv4 Gateway (%s): %s", item["Ipv4GatewayName"].(string), err)
 			}
@@ -118,7 +113,7 @@ func TestAccAlicloudVPCIpv4Gateway_basic0(t *testing.T) {
 	resourceId := "alicloud_vpc_ipv4_gateway.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCIpv4GatewayMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcIpv4Gateway")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -136,14 +131,16 @@ func TestAccAlicloudVPCIpv4Gateway_basic0(t *testing.T) {
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"ipv4_gateway_name":        "${var.name}",
-					"vpc_id":                   "${data.alicloud_vpcs.default.ids.0}",
+					"vpc_id":                   "${alicloud_vpc.default.id}",
 					"ipv4_gateway_description": "${var.name}",
+					"enabled":                  "true",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"ipv4_gateway_name":        name,
 						"vpc_id":                   CHECKSET,
 						"ipv4_gateway_description": name,
+						"enabled":                  "true",
 					}),
 				),
 			},
@@ -199,8 +196,9 @@ func AlicloudVPCIpv4GatewayBasicDependence0(name string) string {
 variable "name" {
   default = "%s"
 }
-data "alicloud_vpcs" "default" {
-	name_regex = "default-NoDeleting"
+resource "alicloud_vpc" "default" {
+  vpc_name   = var.name
+  cidr_block = "10.0.0.0/8"
 }
 `, name)
 }
@@ -458,3 +456,250 @@ func TestUnitAccAlicloudVpcIpv4Gateway(t *testing.T) {
 		}
 	}
 }
+
+// Test Vpc Ipv4Gateway. >>> Resource test cases, automatically generated.
+// Case 3262
+func TestAccAlicloudVpcIpv4Gateway_basic3262(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_ipv4_gateway.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcIpv4GatewayMap3262)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcIpv4Gateway")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcipv4gateway%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcIpv4GatewayBasicDependence3262)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"vpc_id":            "${alicloud_vpc.default.id}",
+					"ipv4_gateway_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"vpc_id":            CHECKSET,
+						"ipv4_gateway_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_description": "tf-testAcc-Ipv4Gateway",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_description": "tf-testAcc-Ipv4Gateway",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.default.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_name": name + "_update",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_name": name + "_update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_name": name + "_update",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_name": name + "_update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_description": "testupdate",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_description": "testupdate",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.modify.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_name":        name + "_update",
+					"ipv4_gateway_description": "tf-testAcc-Ipv4Gateway",
+					"resource_group_id":        "${alicloud_resource_manager_resource_group.default.id}",
+					"vpc_id":                   "${alicloud_vpc.default.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_name":        name + "_update",
+						"ipv4_gateway_description": "tf-testAcc-Ipv4Gateway",
+						"resource_group_id":        CHECKSET,
+						"vpc_id":                   CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run"},
+			},
+		},
+	})
+}
+
+var AlicloudVpcIpv4GatewayMap3262 = map[string]string{}
+
+func AlicloudVpcIpv4GatewayBasicDependence3262(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+    default = "%s"
+}
+
+resource "alicloud_resource_manager_resource_group" "default" {
+  display_name        = "tf-testAcc-rg254"
+  resource_group_name = var.name
+}
+
+resource "alicloud_resource_manager_resource_group" "modify" {
+  display_name        = "tf-testAcc-rg426"
+  resource_group_name = "${var.name}1"
+}
+
+resource "alicloud_vpc" "default" {
+  vpc_name   = "${var.name}2"
+  cidr_block = "10.0.0.0/8"
+}
+
+
+`, name)
+}
+
+// Case 3262  twin
+func TestAccAlicloudVpcIpv4Gateway_basic3262_twin(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_vpc_ipv4_gateway.default"
+	ra := resourceAttrInit(resourceId, AlicloudVpcIpv4GatewayMap3262)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeVpcIpv4Gateway")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testacc%svpcipv4gateway%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudVpcIpv4GatewayBasicDependence3262)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"ipv4_gateway_name":        name,
+					"ipv4_gateway_description": "testupdate",
+					"resource_group_id":        "${alicloud_resource_manager_resource_group.modify.id}",
+					"vpc_id":                   "${alicloud_vpc.default.id}",
+					"enabled":                  "true",
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"ipv4_gateway_name":        name,
+						"ipv4_gateway_description": "testupdate",
+						"resource_group_id":        CHECKSET,
+						"vpc_id":                   CHECKSET,
+						"enabled":                  "true",
+						"tags.%":                   "2",
+						"tags.Created":             "TF",
+						"tags.For":                 "Test",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run"},
+			},
+		},
+	})
+}
+
+// Test Vpc Ipv4Gateway. <<< Resource test cases, automatically generated.

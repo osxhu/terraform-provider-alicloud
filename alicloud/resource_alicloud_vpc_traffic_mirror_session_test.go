@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
@@ -46,16 +44,10 @@ func testSweepVpcTrafficMirrorSession(region string) error {
 	request["MaxResults"] = PageSizeLarge
 
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -94,7 +86,7 @@ func testSweepVpcTrafficMirrorSession(region string) error {
 			request := map[string]interface{}{
 				"TrafficMirrorSessionId": item["TrafficMirrorSessionId"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete Vpc Traffic Mirror Session (%s): %s", item["TrafficMirrorSessionName"].(string), err)
 			}
@@ -115,7 +107,7 @@ func TestAccAlicloudVPCTrafficMirrorSession_basic0(t *testing.T) {
 	resourceId := "alicloud_vpc_traffic_mirror_session.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCTrafficMirrorSessionMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcTrafficMirrorSession")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -246,6 +238,68 @@ func TestAccAlicloudVPCTrafficMirrorSession_basic0(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Test",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Test",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF-update",
+						"For":     "Test-update",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF-update",
+						"tags.For":     "Test-update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "0",
+						"tags.Created": REMOVEKEY,
+						"tags.For":     REMOVEKEY,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
 					"traffic_mirror_filter_id":           "${alicloud_vpc_traffic_mirror_filter.default.0.id}",
 					"traffic_mirror_target_id":           "${alicloud_ecs_network_interface_attachment.default[1].network_interface_id}",
 					"traffic_mirror_target_type":         "NetworkInterface",
@@ -284,7 +338,7 @@ func TestAccAlicloudVPCTrafficMirrorSession_basic1(t *testing.T) {
 	resourceId := "alicloud_vpc_traffic_mirror_session.default"
 	ra := resourceAttrInit(resourceId, AlicloudVPCTrafficMirrorSessionMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &VpcServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeVpcTrafficMirrorSession")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
@@ -311,6 +365,7 @@ func TestAccAlicloudVPCTrafficMirrorSession_basic1(t *testing.T) {
 					"dry_run":                            "false",
 					"enabled":                            "true",
 					"virtual_network_id":                 "10",
+					"packet_length":                      "1300",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -324,6 +379,7 @@ func TestAccAlicloudVPCTrafficMirrorSession_basic1(t *testing.T) {
 						"dry_run":                            "false",
 						"enabled":                            "true",
 						"virtual_network_id":                 "10",
+						"packet_length":                      "1300",
 					}),
 				),
 			},
@@ -364,7 +420,7 @@ data "alicloud_zones" "default" {
 }
 
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+    name_regex = "^default-NODELETING$"
 }
 data "alicloud_vswitches" "default" {
   vpc_id  = data.alicloud_vpcs.default.ids.0
@@ -417,5 +473,8 @@ resource "alicloud_ecs_network_interface_attachment" "default" {
   count                = 3
   instance_id          = element(alicloud_instance.default.*.id, count.index)
   network_interface_id = element(alicloud_ecs_network_interface.default.*.id, count.index)
+}
+
+data "alicloud_resource_manager_resource_groups" "default" {
 }`, name)
 }

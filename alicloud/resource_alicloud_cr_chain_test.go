@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/cr_ee"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -35,11 +34,6 @@ func testSweepCRChain(region string) error {
 		"tf_testAcc",
 		"tftestAcc",
 	}
-	conn, err := client.NewAcrClient()
-	if err != nil {
-		log.Printf("[ERROR] Failed to fetch client.NewAcrClient: %s ", err)
-		return nil
-	}
 
 	crService := &CrService{client}
 	pageNo := 1
@@ -62,14 +56,16 @@ func testSweepCRChain(region string) error {
 	instanceIds := make([]string, 0)
 	for _, instance := range instances {
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(instance.InstanceName), strings.ToLower(prefix)) {
-				skip = false
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(instance.InstanceName), strings.ToLower(prefix)) {
+					skip = false
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping cr ee instance: %s ", instance.InstanceName)
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping cr ee instance: %s ", instance.InstanceName)
+				continue
+			}
 		}
 		instanceIds = append(instanceIds, instance.InstanceId)
 	}
@@ -86,11 +82,9 @@ func testSweepCRChain(region string) error {
 		for {
 			request["PageNo"] = pageNo
 			request["PageSize"] = pageSize
-			runtime := util.RuntimeOptions{}
-			runtime.SetAutoretry(true)
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-12-01"), StringPointer("AK"), nil, request, &runtime)
+				response, err = client.RpcPost("cr", "2018-12-01", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -146,7 +140,7 @@ func testSweepCRChain(region string) error {
 				}
 				wait := incrementalWait(3*time.Second, 3*time.Second)
 				err = resource.Retry(time.Minute*10, func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-12-01"), StringPointer("AK"), nil, deleteRequest, &util.RuntimeOptions{})
+					response, err = client.RpcPost("cr", "2018-12-01", action, nil, deleteRequest, true)
 					if err != nil {
 						if NeedRetry(err) {
 							wait()
@@ -574,7 +568,6 @@ variable "name" {
 }
 
 data "alicloud_cr_ee_instances" "default" {
-  name_regex  = "tf-testacc"
 }
 
 resource "alicloud_cr_ee_namespace" "default" {

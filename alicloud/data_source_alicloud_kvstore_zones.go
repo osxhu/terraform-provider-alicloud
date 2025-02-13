@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	r_kvstore "github.com/aliyun/alibaba-cloud-sdk-go/services/r-kvstore"
@@ -88,15 +87,13 @@ func dataSourceAlicloudKVStoreZoneRead(d *schema.ResourceData, meta interface{})
 	request.ProductType = d.Get("product_type").(string)
 
 	var response *r_kvstore.DescribeAvailableResourceResponse
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
-		raw, err := client.WithRkvClient(func(rkvClient *r_kvstore.Client) (interface{}, error) {
+		raw, err := client.WithRKvstoreClient(func(rkvClient *r_kvstore.Client) (interface{}, error) {
 			return rkvClient.DescribeAvailableResource(request)
 		})
 		if err != nil {
-			if NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"InternalError"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}

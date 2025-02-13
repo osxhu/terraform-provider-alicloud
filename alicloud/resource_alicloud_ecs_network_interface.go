@@ -13,19 +13,19 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
-func resourceAlicloudEcsNetworkInterface() *schema.Resource {
+func resourceAliCloudEcsNetworkInterface() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAlicloudEcsNetworkInterfaceCreate,
-		Read:   resourceAlicloudEcsNetworkInterfaceRead,
-		Update: resourceAlicloudEcsNetworkInterfaceUpdate,
-		Delete: resourceAlicloudEcsNetworkInterfaceDelete,
+		Create: resourceAliCloudEcsNetworkInterfaceCreate,
+		Read:   resourceAliCloudEcsNetworkInterfaceRead,
+		Update: resourceAliCloudEcsNetworkInterfaceUpdate,
+		Delete: resourceAliCloudEcsNetworkInterfaceDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(2 * time.Minute),
-			Delete: schema.DefaultTimeout(1 * time.Minute),
 			Update: schema.DefaultTimeout(1 * time.Minute),
+			Delete: schema.DefaultTimeout(1 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
 			"description": {
@@ -71,8 +71,7 @@ func resourceAlicloudEcsNetworkInterface() *schema.Resource {
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				MaxItems:      10,
-				ConflictsWith: []string{"private_ips", "secondary_private_ip_address_count", "private_ips_count"},
+				ConflictsWith: []string{"private_ips", "secondary_private_ip_address_count", "private_ips_count", "ipv4_prefixes", "ipv4_prefix_count"},
 			},
 			"private_ips": {
 				Type:     schema.TypeSet,
@@ -81,9 +80,8 @@ func resourceAlicloudEcsNetworkInterface() *schema.Resource {
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				MaxItems:      10,
 				Deprecated:    "Field 'private_ips' has been deprecated from provider version 1.123.1. New field 'private_ip_addresses' instead",
-				ConflictsWith: []string{"private_ip_addresses", "secondary_private_ip_address_count", "private_ips_count"},
+				ConflictsWith: []string{"private_ip_addresses", "secondary_private_ip_address_count", "private_ips_count", "ipv4_prefixes", "ipv4_prefix_count"},
 			},
 			"queue_number": {
 				Type:     schema.TypeInt,
@@ -99,16 +97,14 @@ func resourceAlicloudEcsNetworkInterface() *schema.Resource {
 				Type:          schema.TypeInt,
 				Optional:      true,
 				Computed:      true,
-				ValidateFunc:  validation.IntBetween(0, 10),
-				ConflictsWith: []string{"private_ips_count", "private_ip_addresses", "private_ips"},
+				ConflictsWith: []string{"private_ips_count", "private_ip_addresses", "private_ips", "ipv4_prefixes", "ipv4_prefix_count"},
 			},
 			"private_ips_count": {
 				Type:          schema.TypeInt,
 				Optional:      true,
 				Computed:      true,
-				ValidateFunc:  validation.IntBetween(0, 10),
 				Deprecated:    "Field 'private_ips_count' has been deprecated from provider version 1.123.1. New field 'secondary_private_ip_address_count' instead",
-				ConflictsWith: []string{"secondary_private_ip_address_count", "private_ip_addresses", "private_ips"},
+				ConflictsWith: []string{"secondary_private_ip_address_count", "private_ip_addresses", "private_ips", "ipv4_prefixes", "ipv4_prefix_count"},
 			},
 			"security_group_ids": {
 				Type:     schema.TypeList,
@@ -156,11 +152,38 @@ func resourceAlicloudEcsNetworkInterface() *schema.Resource {
 				Elem:          &schema.Schema{Type: schema.TypeString},
 				ConflictsWith: []string{"ipv6_address_count"},
 			},
+			"ipv4_prefix_count": {
+				Type:          schema.TypeInt,
+				Optional:      true,
+				Computed:      true,
+				ValidateFunc:  validation.IntBetween(1, 10),
+				ConflictsWith: []string{"ipv4_prefixes", "private_ip_addresses", "secondary_private_ip_address_count", "private_ip_addresses", "private_ips_count"},
+			},
+			"ipv4_prefixes": {
+				Type:          schema.TypeSet,
+				Optional:      true,
+				Computed:      true,
+				MaxItems:      10,
+				Elem:          &schema.Schema{Type: schema.TypeString},
+				ConflictsWith: []string{"ipv4_prefix_count", "private_ip_addresses", "secondary_private_ip_address_count", "private_ip_addresses", "private_ips_count"},
+			},
+			"instance_type": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+				Computed: true,
+			},
+			"network_interface_traffic_mode": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+				Computed: true,
+			},
 		},
 	}
 }
 
-func resourceAlicloudEcsNetworkInterfaceCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudEcsNetworkInterfaceCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	ecsService := EcsService{client}
 	var response map[string]interface{}
@@ -228,11 +251,27 @@ func resourceAlicloudEcsNetworkInterfaceCreate(d *schema.ResourceData, meta inte
 	if v, ok := d.GetOkExists("ipv6_address_count"); ok {
 		request["Ipv6AddressCount"] = v
 	}
+
+	if v, ok := d.GetOk("ipv4_prefixes"); ok {
+		request["Ipv4Prefix"] = v.(*schema.Set).List()
+	}
+	if v, ok := d.GetOkExists("ipv4_prefix_count"); ok {
+		request["Ipv4PrefixCount"] = v
+	}
+
+	if v, ok := d.GetOk("instance_type"); ok {
+		request["InstanceType"] = v
+	}
+
+	if v, ok := d.GetOk("network_interface_traffic_mode"); ok {
+		request["NetworkInterfaceTrafficMode"] = v
+	}
+
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
 		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
 		if err != nil {
-			if NeedRetry(err) {
+			if NeedRetry(err) || IsExpectedErrors(err, []string{"IncorrectVSwitchStatus"}) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -251,9 +290,10 @@ func resourceAlicloudEcsNetworkInterfaceCreate(d *schema.ResourceData, meta inte
 		return WrapErrorf(err, IdMsg, d.Id())
 	}
 
-	return resourceAlicloudEcsNetworkInterfaceRead(d, meta)
+	return resourceAliCloudEcsNetworkInterfaceRead(d, meta)
 }
-func resourceAlicloudEcsNetworkInterfaceRead(d *schema.ResourceData, meta interface{}) error {
+
+func resourceAliCloudEcsNetworkInterfaceRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	ecsService := EcsService{client}
 	object, err := ecsService.DescribeEcsNetworkInterface(d.Id())
@@ -288,6 +328,13 @@ func resourceAlicloudEcsNetworkInterfaceRead(d *schema.ResourceData, meta interf
 	}
 	d.Set("ipv6_addresses", ipv6SetList)
 	d.Set("ipv6_address_count", len(ipv6SetList))
+	ipv4PrefixSetList := make([]interface{}, 0, len(object["Ipv4PrefixSets"].(map[string]interface{})["Ipv4PrefixSet"].([]interface{})))
+	for _, v := range object["Ipv4PrefixSets"].(map[string]interface{})["Ipv4PrefixSet"].([]interface{}) {
+		ipv4PrefixSet := v.(map[string]interface{})
+		ipv4PrefixSetList = append(ipv4PrefixSetList, ipv4PrefixSet["Ipv4Prefix"])
+	}
+	d.Set("ipv4_prefixes", ipv4PrefixSetList)
+	d.Set("ipv4_prefix_count", len(ipv4PrefixSetList))
 	d.Set("queue_number", formatInt(object["QueueNumber"]))
 	d.Set("resource_group_id", object["ResourceGroupId"])
 	d.Set("security_group_ids", object["SecurityGroupIds"].(map[string]interface{})["SecurityGroupId"])
@@ -302,9 +349,13 @@ func resourceAlicloudEcsNetworkInterfaceRead(d *schema.ResourceData, meta interf
 	}
 
 	d.Set("vswitch_id", object["VSwitchId"])
+	d.Set("instance_type", object["Type"])
+	d.Set("network_interface_traffic_mode", object["NetworkInterfaceTrafficMode"])
+
 	return nil
 }
-func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta interface{}) error {
+
+func resourceAliCloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	conn, err := client.NewEcsClient()
 	if err != nil {
@@ -321,6 +372,7 @@ func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta inte
 		d.SetPartial("tags")
 	}
 	update := false
+	updateSecurityGroup := false
 	request := map[string]interface{}{
 		"NetworkInterfaceId": d.Id(),
 	}
@@ -335,7 +387,7 @@ func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta inte
 	}
 	if d.HasChange("name") {
 		update = true
-		request["Name"] = d.Get("name")
+		request["NetworkInterfaceName"] = d.Get("name")
 	}
 	if d.HasChange("queue_number") {
 		update = true
@@ -344,10 +396,12 @@ func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta inte
 	if d.HasChange("security_group_ids") {
 		update = true
 		request["SecurityGroupId"] = d.Get("security_group_ids")
+		updateSecurityGroup = true
 	}
 	if d.HasChange("security_groups") {
 		update = true
 		request["SecurityGroupId"] = d.Get("security_groups")
+		updateSecurityGroup = true
 	}
 	if update {
 		action := "ModifyNetworkInterfaceAttribute"
@@ -373,6 +427,9 @@ func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta inte
 		d.SetPartial("queue_number")
 		d.SetPartial("security_groups")
 		d.SetPartial("security_group_ids")
+		if updateSecurityGroup {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 	d.Partial(false)
 	if d.HasChange("private_ip_addresses") {
@@ -759,9 +816,144 @@ func resourceAlicloudEcsNetworkInterfaceUpdate(d *schema.ResourceData, meta inte
 		d.SetPartial("ipv6_address_count")
 		d.SetPartial("ipv6_addresses")
 	}
-	return resourceAlicloudEcsNetworkInterfaceRead(d, meta)
+
+	if d.HasChange("ipv4_prefix_count") {
+		ipv4PrefixList := expandStringList(d.Get("ipv4_prefixes").(*schema.Set).List())
+		oldIpv4PrefixCount, newIpv4PrefixCount := d.GetChange("ipv4_prefix_count")
+		if oldIpv4PrefixCount != nil && newIpv4PrefixCount != nil && newIpv4PrefixCount != len(ipv4PrefixList) {
+			diff := newIpv4PrefixCount.(int) - oldIpv4PrefixCount.(int)
+			if diff > 0 {
+				action := "AssignPrivateIpAddresses"
+				request := map[string]interface{}{
+					"RegionId":           client.RegionId,
+					"NetworkInterfaceId": d.Id(),
+					"ClientToken":        buildClientToken(action),
+					"Ipv4PrefixCount":    diff,
+				}
+				wait := incrementalWait(3*time.Second, 3*time.Second)
+				err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					if err != nil {
+						if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationConflict"}) {
+							wait()
+							return resource.RetryableError(err)
+						}
+						return resource.NonRetryableError(err)
+					}
+					return nil
+				})
+				addDebug(action, response, request)
+				if err != nil {
+					return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+				}
+			}
+			if diff < 0 {
+				diff *= -1
+				action := "UnassignPrivateIpAddresses"
+				request := map[string]interface{}{
+					"RegionId":           client.RegionId,
+					"NetworkInterfaceId": d.Id(),
+					"ClientToken":        buildClientToken(action),
+				}
+				for index, val := range ipv4PrefixList[:diff] {
+					request[fmt.Sprintf("Ipv4Prefix.%d", index+1)] = val
+				}
+				wait := incrementalWait(3*time.Second, 3*time.Second)
+				err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					if err != nil {
+						if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationConflict"}) {
+							wait()
+							return resource.RetryableError(err)
+						}
+						return resource.NonRetryableError(err)
+					}
+					return nil
+				})
+				addDebug(action, response, request)
+				if err != nil {
+					return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+				}
+			}
+			err = ecsService.WaitForModifyIpv4PrefixCount(d.Id(), newIpv4PrefixCount.(int), DefaultTimeoutMedium)
+			if err != nil {
+				return WrapError(err)
+			}
+			d.SetPartial("ipv4_prefix_count")
+			d.SetPartial("ipv4_prefixes")
+		}
+	}
+
+	if d.HasChange("ipv4_prefixes") {
+		oraw, nraw := d.GetChange("ipv4_prefixes")
+		remove := oraw.(*schema.Set).Difference(nraw.(*schema.Set)).List()
+		create := nraw.(*schema.Set).Difference(oraw.(*schema.Set)).List()
+		if len(remove) > 0 {
+			action := "UnassignPrivateIpAddresses"
+			request := map[string]interface{}{
+				"RegionId":           client.RegionId,
+				"NetworkInterfaceId": d.Id(),
+				"ClientToken":        buildClientToken(action),
+			}
+			for index, val := range remove {
+				request[fmt.Sprintf("Ipv4Prefix.%d", index+1)] = val
+			}
+			wait := incrementalWait(3*time.Second, 3*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				if err != nil {
+					if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationConflict"}) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				return nil
+			})
+			addDebug(action, response, request)
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+		}
+		if len(create) > 0 {
+			action := "AssignPrivateIpAddresses"
+			request := map[string]interface{}{
+				"RegionId":           client.RegionId,
+				"NetworkInterfaceId": d.Id(),
+				"ClientToken":        buildClientToken(action),
+			}
+			for index, val := range create {
+				request[fmt.Sprintf("Ipv4Prefix.%d", index+1)] = val
+			}
+			wait := incrementalWait(3*time.Second, 3*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				if err != nil {
+					if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationConflict"}) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				return nil
+			})
+			addDebug(action, response, request)
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+		}
+
+		err = ecsService.WaitForModifyIpv4Prefix(d.Id(), expandStringList(nraw.(*schema.Set).List()), DefaultTimeoutMedium)
+		if err != nil {
+			return WrapError(err)
+		}
+		d.SetPartial("ipv4_prefix_count")
+		d.SetPartial("ipv4_prefixes")
+	}
+	return resourceAliCloudEcsNetworkInterfaceRead(d, meta)
 }
-func resourceAlicloudEcsNetworkInterfaceDelete(d *schema.ResourceData, meta interface{}) error {
+
+func resourceAliCloudEcsNetworkInterfaceDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	ecsService := EcsService{client}
 	action := "DeleteNetworkInterface"
@@ -779,7 +971,7 @@ func resourceAlicloudEcsNetworkInterfaceDelete(d *schema.ResourceData, meta inte
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
 		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
 		if err != nil {
-			if IsExpectedErrors(err, []string{"InvalidOperation.Conflict", "InternalError", "InvalidOperation.InvalidEcsState", "InvalidOperation.InvalidEniState", "OperationConflict", "ServiceUnavailable"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"InvalidOperation.Conflict", "InternalError", "InvalidOperation.InvalidEcsState", "InvalidOperation.InvalidEniState", "InvalidOperation.InvalidEniType", "OperationConflict", "ServiceUnavailable"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}

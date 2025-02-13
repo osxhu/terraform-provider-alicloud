@@ -47,11 +47,7 @@ func testSweepOnsGroup(region string) error {
 	action := "OnsInstanceInServiceList"
 	request := make(map[string]interface{})
 	var response map[string]interface{}
-	conn, err := client.NewOnsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 	if err != nil {
 		log.Printf("[ERROR] Failed to retrieve ons instance in service list: %s", err)
 	}
@@ -72,11 +68,7 @@ func testSweepOnsGroup(region string) error {
 		action := "OnsGroupList"
 		request := make(map[string]interface{})
 		var response map[string]interface{}
-		conn, err := client.NewOnsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 		if err != nil {
 			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_ons_groups", action, AlibabaCloudSdkGoERROR)
 		}
@@ -107,7 +99,7 @@ func testSweepOnsGroup(region string) error {
 				"GroupId":    name,
 				"InstanceId": instanceId,
 			}
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete ons group (%s): %s", name, err)
 
@@ -118,7 +110,7 @@ func testSweepOnsGroup(region string) error {
 	return nil
 }
 
-func TestAccAlicloudOnsGroup_basic(t *testing.T) {
+func TestAccAliCloudOnsGroup_basic(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ons_group.default"
 	ra := resourceAttrInit(resourceId, onsGroupBasicMap)
@@ -203,6 +195,53 @@ func TestAccAlicloudOnsGroup_basic(t *testing.T) {
 
 }
 
+func TestAccAliCloudOnsGroup_multi(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_ons_group.default"
+	ra := resourceAttrInit(resourceId, onsGroupBasicMap)
+	serviceFunc := func() interface{} {
+		return &OnsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}
+	rc := resourceCheckInit(resourceId, &v, serviceFunc)
+	rac := resourceAttrCheckInit(rc, ra)
+
+	rand := acctest.RandIntRange(1000000, 9999999)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	name := fmt.Sprintf("GID-tf-testacconsgroupbasic%v", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceOnsGroupMultiConfigMulti)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		// module name
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"instance_id": "${alicloud_ons_instance.default.id}",
+					"group_id":    "${var.group_id}",
+					"remark":      "alicloud_ons_group_remark",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"group_id": fmt.Sprintf("GID-tf-testacconsgroupbasic%v", rand),
+						"remark":   "alicloud_ons_group_remark",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+
+}
+
 func resourceOnsGroupConfigDependence(name string) string {
 	return fmt.Sprintf(`
 resource "alicloud_ons_instance" "default" {
@@ -211,6 +250,51 @@ resource "alicloud_ons_instance" "default" {
 
 variable "group_id" {
  default = "%s"
+}
+`, name, name)
+}
+
+func resourceOnsGroupMultiConfigMulti(name string) string {
+	return fmt.Sprintf(`
+variable "group_id" {
+  default = "%s"
+}
+variable "groups" {
+  type = list(map(string))
+  default = [
+    {
+      "group_name" : "GID_TF_TEST_1_2",
+      "remark" : "TF_TEST_1_2"
+    },
+    {
+      "group_name" : "GID_TF_TEST_1_1",
+      "remark" : "TF_TEST_1_1"
+    },
+      {
+      "group_name" : "GID_TF_TEST_1",
+      "remark" : "TF_TEST_1"
+    },
+      {
+      "group_name" : "GID_TF_TEST_2_1",
+      "remark" : "TF_TEST_2_1"
+    },
+      {
+      "group_name" : "GID_TF_TEST_2",
+      "remark" : "TF_TEST_2"
+    }
+  ]
+  description = "The specification of ons groups."
+}
+
+resource "alicloud_ons_instance" "default" {
+	instance_name = "%s"
+}
+
+resource "alicloud_ons_group" "default1" {
+	count       = length(var.groups)
+	instance_id = alicloud_ons_instance.default.id
+	group_name  = var.groups[count.index].group_name
+	remark      = var.groups[count.index].remark
 }
 `, name, name)
 }

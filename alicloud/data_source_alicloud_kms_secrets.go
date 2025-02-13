@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -121,6 +120,11 @@ func dataSourceAlicloudKmsSecretsRead(d *schema.ResourceData, meta interface{}) 
 
 	action := "ListSecrets"
 	request := make(map[string]interface{})
+	tagsMap := make(map[string]interface{})
+	if v, ok := d.GetOk("tags"); ok && len(v.(map[string]interface{})) > 0 {
+		tagsMap = v.(map[string]interface{})
+		request["FetchTags"] = true
+	}
 	if v, ok := d.GetOkExists("fetch_tags"); ok {
 		request["FetchTags"] = v
 	}
@@ -148,21 +152,13 @@ func dataSourceAlicloudKmsSecretsRead(d *schema.ResourceData, meta interface{}) 
 			idsMap[vv.(string)] = vv.(string)
 		}
 	}
-	tagsMap := make(map[string]interface{})
-	if v, ok := d.GetOk("tags"); ok && len(v.(map[string]interface{})) > 0 {
-		tagsMap = v.(map[string]interface{})
-	}
+
 	var response map[string]interface{}
-	conn, err := client.NewKmsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-01-20"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Kms", "2016-01-20", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -193,7 +189,7 @@ func dataSourceAlicloudKmsSecretsRead(d *schema.ResourceData, meta interface{}) 
 					continue
 				}
 			}
-			if len(tagsMap) > 0 {
+			if len(tagsMap) > 0 && item["Tags"] != nil && len(item["Tags"].(map[string]interface{})) > 0 {
 				if len(item["Tags"].(map[string]interface{})["Tag"].([]interface{})) != len(tagsMap) {
 					continue
 				}

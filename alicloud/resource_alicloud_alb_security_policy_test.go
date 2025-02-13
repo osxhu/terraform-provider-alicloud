@@ -50,16 +50,10 @@ func testSweepAlbSecurityPolicy(region string) error {
 	request["MaxResults"] = PageSizeXLarge
 
 	var response map[string]interface{}
-	conn, err := client.NewAlbClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -89,20 +83,22 @@ func testSweepAlbSecurityPolicy(region string) error {
 			}
 
 			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(item["SecurityPolicyName"].(string)), strings.ToLower(prefix)) {
-					skip = false
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(item["SecurityPolicyName"].(string)), strings.ToLower(prefix)) {
+						skip = false
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping ALB Security Policy: %s", item["SecurityPolicyName"].(string))
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping ALB Security Policy: %s", item["SecurityPolicyName"].(string))
+					continue
+				}
 			}
 			action := "DeleteSecurityPolicy"
 			request := map[string]interface{}{
 				"SecurityPolicyId": item["SecurityPolicyId"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-06-16"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Alb", "2020-06-16", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete ALB Security Policy (%s): %s", item["SecurityPolicyId"].(string), err)
 			}

@@ -1,113 +1,117 @@
+// Package alicloud. This file is generated automatically. Please do not modify it manually, thank you!
 package alicloud
 
 import (
 	"fmt"
+	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
-func resourceAlicloudMessageServiceQueue() *schema.Resource {
+func resourceAliCloudMessageServiceQueue() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAlicloudMessageServiceQueueCreate,
-		Read:   resourceAlicloudMessageServiceQueueRead,
-		Update: resourceAlicloudMessageServiceQueueUpdate,
-		Delete: resourceAlicloudMessageServiceQueueDelete,
+		Create: resourceAliCloudMessageServiceQueueCreate,
+		Read:   resourceAliCloudMessageServiceQueueRead,
+		Update: resourceAliCloudMessageServiceQueueUpdate,
+		Delete: resourceAliCloudMessageServiceQueueDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
 		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(3 * time.Minute),
-			Update: schema.DefaultTimeout(3 * time.Minute),
-			Delete: schema.DefaultTimeout(3 * time.Minute),
+			Create: schema.DefaultTimeout(5 * time.Minute),
+			Update: schema.DefaultTimeout(5 * time.Minute),
+			Delete: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
-			"queue_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+			"create_time": {
+				Type:     schema.TypeInt,
+				Computed: true,
 			},
 			"delay_seconds": {
 				Type:         schema.TypeInt,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.IntBetween(0, 604800),
-			},
-			"maximum_message_size": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				Computed:     true,
-				ValidateFunc: validation.IntBetween(1024, 65536),
-			},
-			"message_retention_period": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				Computed:     true,
-				ValidateFunc: validation.IntBetween(60, 604800),
-			},
-			"visibility_timeout": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				Computed:     true,
-				ValidateFunc: validation.IntBetween(1, 43200),
-			},
-			"polling_wait_seconds": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				Computed:     true,
-				ValidateFunc: validation.IntBetween(0, 30),
+				ValidateFunc: IntBetween(0, 604800),
 			},
 			"logging_enabled": {
 				Type:     schema.TypeBool,
 				Optional: true,
 			},
+			"maximum_message_size": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: IntBetween(1024, 65536),
+			},
+			"message_retention_period": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: IntBetween(60, 604800),
+			},
+			"polling_wait_seconds": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: IntBetween(0, 30),
+			},
+			"queue_name": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
+			"tags": tagsSchema(),
+			"visibility_timeout": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: IntBetween(0, 43200),
+			},
 		},
 	}
 }
 
-func resourceAlicloudMessageServiceQueueCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*connectivity.AliyunClient)
-	var response map[string]interface{}
-	action := "CreateQueue"
-	request := make(map[string]interface{})
-	conn, err := client.NewMnsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+func resourceAliCloudMessageServiceQueueCreate(d *schema.ResourceData, meta interface{}) error {
 
+	client := meta.(*connectivity.AliyunClient)
+
+	action := "CreateQueue"
+	var request map[string]interface{}
+	var response map[string]interface{}
+	query := make(map[string]interface{})
+	var err error
+	request = make(map[string]interface{})
 	request["QueueName"] = d.Get("queue_name")
 
-	if v, ok := d.GetOkExists("delay_seconds"); ok {
-		request["DelaySeconds"] = v
-	}
-
-	if v, ok := d.GetOk("maximum_message_size"); ok {
-		request["MaximumMessageSize"] = v
-	}
-
-	if v, ok := d.GetOk("message_retention_period"); ok {
+	if v, ok := d.GetOkExists("message_retention_period"); ok {
 		request["MessageRetentionPeriod"] = v
 	}
-
-	if v, ok := d.GetOk("visibility_timeout"); ok {
-		request["VisibilityTimeout"] = v
-	}
-
 	if v, ok := d.GetOkExists("polling_wait_seconds"); ok {
 		request["PollingWaitSeconds"] = v
 	}
-
+	if v, ok := d.GetOkExists("visibility_timeout"); ok {
+		request["VisibilityTimeout"] = v
+	}
+	if v, ok := d.GetOkExists("delay_seconds"); ok {
+		request["DelaySeconds"] = v
+	}
+	if v, ok := d.GetOkExists("maximum_message_size"); ok {
+		request["MaximumMessageSize"] = v
+	}
 	if v, ok := d.GetOkExists("logging_enabled"); ok {
 		request["EnableLogging"] = v
 	}
+	if v, ok := d.GetOk("tags"); ok {
+		tagsMap := ConvertTags(v.(map[string]interface{}))
+		request = expandTagsToMap(request, tagsMap)
+	}
 
-	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2022-01-19"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+		response, err = client.RpcPost("Mns-open", "2022-01-19", action, query, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -118,79 +122,112 @@ func resourceAlicloudMessageServiceQueueCreate(d *schema.ResourceData, meta inte
 		return nil
 	})
 	addDebug(action, response, request)
+
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_message_service_queue", action, AlibabaCloudSdkGoERROR)
 	}
 
 	d.SetId(fmt.Sprint(request["QueueName"]))
 
-	return resourceAlicloudMessageServiceQueueRead(d, meta)
+	return resourceAliCloudMessageServiceQueueRead(d, meta)
 }
 
-func resourceAlicloudMessageServiceQueueRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudMessageServiceQueueRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	mnsOpenService := MnsOpenService{client}
-	object, err := mnsOpenService.DescribeMessageServiceQueue(d.Id())
+	messageServiceServiceV2 := MessageServiceServiceV2{client}
+
+	objectRaw, err := messageServiceServiceV2.DescribeMessageServiceQueue(d.Id())
 	if err != nil {
-		if NotFoundError(err) {
+		if !d.IsNewResource() && NotFoundError(err) {
+			log.Printf("[DEBUG] Resource alicloud_message_service_queue DescribeMessageServiceQueue Failed!!! %s", err)
 			d.SetId("")
 			return nil
 		}
 		return WrapError(err)
 	}
 
-	d.Set("queue_name", object["QueueName"])
-	d.Set("delay_seconds", object["DelaySeconds"])
-	d.Set("maximum_message_size", object["MaximumMessageSize"])
-	d.Set("message_retention_period", object["MessageRetentionPeriod"])
-	d.Set("visibility_timeout", object["VisibilityTimeout"])
-	d.Set("polling_wait_seconds", object["PollingWaitSeconds"])
-	d.Set("logging_enabled", object["LoggingEnabled"])
+	if objectRaw["CreateTime"] != nil {
+		d.Set("create_time", objectRaw["CreateTime"])
+	}
+	if objectRaw["DelaySeconds"] != nil {
+		d.Set("delay_seconds", objectRaw["DelaySeconds"])
+	}
+	if objectRaw["LoggingEnabled"] != nil {
+		d.Set("logging_enabled", objectRaw["LoggingEnabled"])
+	}
+	if objectRaw["MaximumMessageSize"] != nil {
+		d.Set("maximum_message_size", objectRaw["MaximumMessageSize"])
+	}
+	if objectRaw["MessageRetentionPeriod"] != nil {
+		d.Set("message_retention_period", objectRaw["MessageRetentionPeriod"])
+	}
+	if objectRaw["PollingWaitSeconds"] != nil {
+		d.Set("polling_wait_seconds", objectRaw["PollingWaitSeconds"])
+	}
+	if objectRaw["VisibilityTimeout"] != nil {
+		d.Set("visibility_timeout", objectRaw["VisibilityTimeout"])
+	}
+	if objectRaw["QueueName"] != nil {
+		d.Set("queue_name", objectRaw["QueueName"])
+	}
+
+	tagsMaps := objectRaw["Tags"]
+	d.Set("tags", tagsToMap(tagsMaps))
 
 	return nil
 }
 
-func resourceAlicloudMessageServiceQueueUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudMessageServiceQueueUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
+	var request map[string]interface{}
 	var response map[string]interface{}
+	var query map[string]interface{}
 	update := false
-	request := map[string]interface{}{
-		"QueueName": d.Id(),
-	}
+	d.Partial(true)
 
-	if !d.IsNewResource() && d.HasChange("delay_seconds") {
-		update = true
-	}
-	if v, ok := d.GetOkExists("delay_seconds"); ok {
-		request["DelaySeconds"] = v
-	}
-
-	if !d.IsNewResource() && d.HasChange("maximum_message_size") {
-		update = true
-	}
-	if v, ok := d.GetOk("maximum_message_size"); ok {
-		request["MaximumMessageSize"] = v
-	}
-
+	action := "SetQueueAttributes"
+	var err error
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+	request["QueueName"] = d.Id()
 	if !d.IsNewResource() && d.HasChange("message_retention_period") {
 		update = true
-	}
-	if v, ok := d.GetOk("message_retention_period"); ok {
-		request["MessageRetentionPeriod"] = v
-	}
 
-	if !d.IsNewResource() && d.HasChange("visibility_timeout") {
-		update = true
-	}
-	if v, ok := d.GetOk("visibility_timeout"); ok {
-		request["VisibilityTimeout"] = v
+		if v, ok := d.GetOk("message_retention_period"); ok {
+			request["MessageRetentionPeriod"] = v
+		}
 	}
 
 	if !d.IsNewResource() && d.HasChange("polling_wait_seconds") {
 		update = true
+
+		if v, ok := d.GetOkExists("polling_wait_seconds"); ok {
+			request["PollingWaitSeconds"] = v
+		}
 	}
-	if v, ok := d.GetOkExists("polling_wait_seconds"); ok {
-		request["PollingWaitSeconds"] = v
+
+	if !d.IsNewResource() && d.HasChange("visibility_timeout") {
+		update = true
+
+		if v, ok := d.GetOk("visibility_timeout"); ok {
+			request["VisibilityTimeout"] = v
+		}
+	}
+
+	if !d.IsNewResource() && d.HasChange("delay_seconds") {
+		update = true
+
+		if v, ok := d.GetOkExists("delay_seconds"); ok {
+			request["DelaySeconds"] = v
+		}
+	}
+
+	if !d.IsNewResource() && d.HasChange("maximum_message_size") {
+		update = true
+
+		if v, ok := d.GetOkExists("maximum_message_size"); ok {
+			request["MaximumMessageSize"] = v
+		}
 	}
 
 	if !d.IsNewResource() && d.HasChange("logging_enabled") {
@@ -201,15 +238,9 @@ func resourceAlicloudMessageServiceQueueUpdate(d *schema.ResourceData, meta inte
 	}
 
 	if update {
-		action := "SetQueueAttributes"
-		conn, err := client.NewMnsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-
-		wait := incrementalWait(3*time.Second, 3*time.Second)
-		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2022-01-19"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		wait := incrementalWait(3*time.Second, 5*time.Second)
+		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+			response, err = client.RpcPost("Mns-open", "2022-01-19", action, query, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -225,24 +256,31 @@ func resourceAlicloudMessageServiceQueueUpdate(d *schema.ResourceData, meta inte
 		}
 	}
 
-	return resourceAlicloudMessageServiceQueueRead(d, meta)
+	if !d.IsNewResource() && d.HasChange("tags") {
+		messageServiceServiceV2 := MessageServiceServiceV2{client}
+		if err := messageServiceServiceV2.SetResourceTags(d, "queue"); err != nil {
+			return WrapError(err)
+		}
+	}
+	d.Partial(false)
+	return resourceAliCloudMessageServiceQueueRead(d, meta)
 }
 
-func resourceAlicloudMessageServiceQueueDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudMessageServiceQueueDelete(d *schema.ResourceData, meta interface{}) error {
+
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteQueue"
+	var request map[string]interface{}
 	var response map[string]interface{}
-	conn, err := client.NewMnsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	request := map[string]interface{}{
-		"QueueName": d.Id(),
-	}
+	query := make(map[string]interface{})
+	var err error
+	request = make(map[string]interface{})
+	request["QueueName"] = d.Id()
 
-	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2022-01-19"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
+		response, err = client.RpcPost("Mns-open", "2022-01-19", action, query, request, true)
+
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

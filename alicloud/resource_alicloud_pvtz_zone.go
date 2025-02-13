@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
+	"github.com/PaesslerAG/jsonpath"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -54,6 +54,7 @@ func resourceAlicloudPvtzZone() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
+				Computed: true,
 			},
 			"user_client_ip": {
 				Type:     schema.TypeString,
@@ -107,6 +108,7 @@ func resourceAlicloudPvtzZone() *schema.Resource {
 				Optional:     true,
 				ValidateFunc: validation.StringInSlice([]string{"ON", "OFF"}, false),
 			},
+			"tags": tagsSchema(),
 		},
 	}
 }
@@ -116,10 +118,7 @@ func resourceAlicloudPvtzZoneCreate(d *schema.ResourceData, meta interface{}) er
 	var response map[string]interface{}
 	action := "AddZone"
 	request := make(map[string]interface{})
-	conn, err := client.NewPvtzClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("lang"); ok {
 		request["Lang"] = v
 	}
@@ -144,7 +143,7 @@ func resourceAlicloudPvtzZoneCreate(d *schema.ResourceData, meta interface{}) er
 
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"ServiceUnavailable", "System.Busy", "Throttling.User"}) || NeedRetry(err) {
 				wait()
@@ -181,6 +180,7 @@ func resourceAlicloudPvtzZoneRead(d *schema.ResourceData, meta interface{}) erro
 	d.Set("remark", object["Remark"])
 	d.Set("zone_name", object["ZoneName"])
 	d.Set("name", object["ZoneName"])
+	d.Set("resource_group_id", object["ResourceGroupId"])
 
 	if v, ok := object["SyncHostTask"]; ok && v != nil {
 		syncObject := v.(map[string]interface{})
@@ -199,15 +199,21 @@ func resourceAlicloudPvtzZoneRead(d *schema.ResourceData, meta interface{}) erro
 		d.Set("user_info", syncArray)
 		d.Set("sync_status", syncObject["Status"])
 	}
+
+	objectRaw, err := pvtzService.DescribeListTagResources(d.Id())
+	if err != nil {
+		return WrapError(err)
+	}
+
+	tagsMaps, _ := jsonpath.Get("$.TagResources", objectRaw)
+	d.Set("tags", tagsToMap(tagsMaps))
+
 	return nil
 }
 func resourceAlicloudPvtzZoneUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	pvtzService := PvtzService{client}
-	conn, err := client.NewPvtzClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	d.Partial(true)
 
@@ -229,7 +235,7 @@ func resourceAlicloudPvtzZoneUpdate(d *schema.ResourceData, meta interface{}) er
 		action := "SetProxyPattern"
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"ServiceUnavailable", "System.Busy", "Throttling.User"}) || NeedRetry(err) {
 					wait()
@@ -263,7 +269,7 @@ func resourceAlicloudPvtzZoneUpdate(d *schema.ResourceData, meta interface{}) er
 		action := "UpdateZoneRemark"
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, updateZoneRemarkReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, updateZoneRemarkReq, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"ServiceUnavailable", "System.Busy", "Throttling.User"}) || NeedRetry(err) {
 					wait()
@@ -322,7 +328,7 @@ func resourceAlicloudPvtzZoneUpdate(d *schema.ResourceData, meta interface{}) er
 		action := "UpdateSyncEcsHostTask"
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, UpdateSyncEcsHostTaskReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, UpdateSyncEcsHostTaskReq, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"MissingRegion"}) {
 					log.Printf("[DEBUG] Resource alicloud_private_zone_zone UpdateSyncEcsHostTask Missed Region!!! %s", err)
@@ -343,6 +349,14 @@ func resourceAlicloudPvtzZoneUpdate(d *schema.ResourceData, meta interface{}) er
 		d.SetPartial("sync_status")
 		d.SetPartial("user_info")
 	}
+	update = false
+	if d.HasChange("tags") {
+		update = true
+		if err := pvtzService.SetResourceTags(d, "ZONE"); err != nil {
+			return WrapError(err)
+		}
+		d.SetPartial("tags")
+	}
 	d.Partial(false)
 	return resourceAlicloudPvtzZoneRead(d, meta)
 }
@@ -350,10 +364,7 @@ func resourceAlicloudPvtzZoneDelete(d *schema.ResourceData, meta interface{}) er
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteZone"
 	var response map[string]interface{}
-	conn, err := client.NewPvtzClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"ZoneId": d.Id(),
 	}
@@ -366,7 +377,7 @@ func resourceAlicloudPvtzZoneDelete(d *schema.ResourceData, meta interface{}) er
 	}
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"System.Busy", "Throttling.User", "Zone.VpcExists"}) || NeedRetry(err) {
 				wait()

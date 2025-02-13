@@ -7,11 +7,9 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
@@ -59,7 +57,7 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			"destination_endpoint_engine_name": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"ADS", "DB2", "DRDS", "DataHub", "Greenplum", "MSSQL", "MySQL", "PolarDB", "PostgreSQL", "Redis", "Tablestore", "as400", "clickhouse", "kafka", "mongodb", "odps", "oracle", "polardb_o", "polardb_pg", "tidb"}, false),
+				ValidateFunc: StringInSlice([]string{"ADS", "DB2", "DRDS", "DataHub", "Greenplum", "MSSQL", "MySQL", "PolarDB", "PostgreSQL", "Redis", "Tablestore", "as400", "clickhouse", "kafka", "mongodb", "odps", "oracle", "polardb_o", "polardb_pg", "tidb"}, false),
 			},
 			"destination_region": {
 				Type:     schema.TypeString,
@@ -86,18 +84,18 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			"instance_class": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"large", "medium", "micro", "small", "xlarge", "xxlarge"}, false),
+				ValidateFunc: StringInSlice([]string{"large", "medium", "micro", "small", "xlarge", "xxlarge"}, false),
 			},
 			"payment_type": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"PayAsYouGo", "Subscription"}, false),
+				ValidateFunc: StringInSlice([]string{"PayAsYouGo", "Subscription"}, false),
 			},
 			"payment_duration_unit": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Month", "Year"}, false),
+				ValidateFunc: StringInSlice([]string{"Month", "Year"}, false),
 			},
 			"payment_duration": {
 				Type:     schema.TypeInt,
@@ -113,8 +111,8 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			},
 			"source_endpoint_engine_name": {
 				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"MySQL", "Oracle"}, false),
+				Required:     true,
+				ValidateFunc: StringInSlice([]string{"MySQL", "Oracle"}, false),
 			},
 			"source_endpoint_ip": {
 				Type:     schema.TypeString,
@@ -126,8 +124,8 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			},
 			"source_endpoint_instance_type": {
 				Type:         schema.TypeString,
-				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"CEN", "DRDS", "ECS", "Express", "LocalInstance", "PolarDB", "RDS", "dg"}, false),
+				Required:     true,
+				ValidateFunc: StringInSlice([]string{"CEN", "DRDS", "ECS", "Express", "LocalInstance", "PolarDB", "RDS", "dg"}, false),
 			},
 			"source_endpoint_oracle_sid": {
 				Type:     schema.TypeString,
@@ -147,7 +145,7 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			},
 			"source_endpoint_region": {
 				Type:     schema.TypeString,
-				Optional: true,
+				Required: true,
 			},
 			"source_endpoint_role": {
 				Type:     schema.TypeString,
@@ -161,7 +159,7 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Abnormal", "Downgrade", "Locked", "Normal", "NotStarted", "NotStarted", "PreCheckPass", "PrecheckFailed", "Prechecking", "Retrying", "Starting", "Upgrade"}, false),
+				ValidateFunc: StringInSlice([]string{"Abnormal", "Downgrade", "Locked", "Normal", "NotStarted", "NotStarted", "PreCheckPass", "PrecheckFailed", "Prechecking", "Retrying", "Starting", "Upgrade"}, false),
 			},
 			"subscription_data_type_ddl": {
 				Type:     schema.TypeBool,
@@ -177,7 +175,7 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"classic", "vpc"}, false),
+				ValidateFunc: StringInSlice([]string{"classic", "vpc"}, false),
 			},
 			"subscription_instance_vpc_id": {
 				Type:     schema.TypeString,
@@ -190,7 +188,7 @@ func resourceAlicloudDtsSubscriptionJob() *schema.Resource {
 			"sync_architecture": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"bidirectional", "oneway"}, false),
+				ValidateFunc: StringInSlice([]string{"bidirectional", "oneway"}, false),
 			},
 			"synchronization_direction": {
 				Type:     schema.TypeString,
@@ -208,10 +206,7 @@ func resourceAlicloudDtsSubscriptionJobCreate(d *schema.ResourceData, meta inter
 	request := make(map[string]interface{})
 	request["AutoPay"] = false
 	request["AutoStart"] = true
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("compute_unit"); ok {
 		request["ComputeUnit"] = v
 	}
@@ -249,7 +244,7 @@ func resourceAlicloudDtsSubscriptionJobCreate(d *schema.ResourceData, meta inter
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -320,6 +315,7 @@ func resourceAlicloudDtsSubscriptionJobUpdate(d *schema.ResourceData, meta inter
 	client := meta.(*connectivity.AliyunClient)
 	dtsService := DtsService{client}
 	var response map[string]interface{}
+	var err error
 	d.Partial(true)
 
 	if d.HasChange("tags") {
@@ -341,13 +337,9 @@ func resourceAlicloudDtsSubscriptionJobUpdate(d *schema.ResourceData, meta inter
 	request["RegionId"] = client.RegionId
 	if update {
 		action := "ModifyDtsJobName"
-		conn, err := client.NewDtsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -383,13 +375,9 @@ func resourceAlicloudDtsSubscriptionJobUpdate(d *schema.ResourceData, meta inter
 	}
 	if update {
 		action := "ModifyDtsJobPassword"
-		conn, err := client.NewDtsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, modifyDtsJobPasswordReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, modifyDtsJobPasswordReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -565,13 +553,9 @@ func resourceAlicloudDtsSubscriptionJobUpdate(d *schema.ResourceData, meta inter
 			configureSubscriptionReq["Reserve"] = v
 		}
 		action := "ConfigureSubscription"
-		conn, err := client.NewDtsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, configureSubscriptionReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, configureSubscriptionReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -625,10 +609,7 @@ func resourceAlicloudDtsSubscriptionJobDelete(d *schema.ResourceData, meta inter
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteDtsJob"
 	var response map[string]interface{}
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"DtsJobId": d.Id(),
 	}
@@ -642,7 +623,7 @@ func resourceAlicloudDtsSubscriptionJobDelete(d *schema.ResourceData, meta inter
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -662,6 +643,7 @@ func resourceAlicloudDtsSubscriptionJobStatusFlow(d *schema.ResourceData, meta i
 	client := meta.(*connectivity.AliyunClient)
 	dtsService := DtsService{client}
 	var response map[string]interface{}
+	var err error
 	object, err := dtsService.DescribeDtsSubscriptionJob(d.Id())
 	if err != nil {
 		return WrapError(err)
@@ -676,13 +658,9 @@ func resourceAlicloudDtsSubscriptionJobStatusFlow(d *schema.ResourceData, meta i
 				request["SynchronizationDirection"] = v
 			}
 			action := "ResetDtsJob"
-			conn, err := client.NewDtsClient()
-			if err != nil {
-				return WrapError(err)
-			}
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -710,13 +688,9 @@ func resourceAlicloudDtsSubscriptionJobStatusFlow(d *schema.ResourceData, meta i
 				request["SynchronizationDirection"] = v
 			}
 			action := "StartDtsJob"
-			conn, err := client.NewDtsClient()
-			if err != nil {
-				return WrapError(err)
-			}
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -744,13 +718,9 @@ func resourceAlicloudDtsSubscriptionJobStatusFlow(d *schema.ResourceData, meta i
 				request["SynchronizationDirection"] = v
 			}
 			action := "SuspendDtsJob"
-			conn, err := client.NewDtsClient()
-			if err != nil {
-				return WrapError(err)
-			}
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -779,7 +749,11 @@ func convertDtsPaymentTypeResponse(source interface{}) interface{} {
 	switch source {
 	case "PostPaid":
 		return "PayAsYouGo"
+	case "POSTPAY":
+		return "PayAsYouGo"
 	case "PrePaid":
+		return "Subscription"
+	case "PREPAY":
 		return "Subscription"
 	}
 	return source

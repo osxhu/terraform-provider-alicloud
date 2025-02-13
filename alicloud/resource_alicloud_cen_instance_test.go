@@ -17,8 +17,6 @@ import (
 	"github.com/PaesslerAG/jsonpath"
 	util "github.com/alibabacloud-go/tea-utils/service"
 
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
-
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 
 	"github.com/alibabacloud-go/tea-rpc/client"
@@ -46,7 +44,7 @@ var sweepCenInstanceIds []string
 func testSweepCenInstances(region string) error {
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
-		return fmt.Errorf("error getting Alicloud client: %s", err)
+		return fmt.Errorf("error getting AliCloud client: %s", err)
 	}
 	client := rawClient.(*connectivity.AliyunClient)
 
@@ -61,7 +59,7 @@ func testSweepCenInstances(region string) error {
 	describeCensRequest.PageSize = requests.NewInteger(PageSizeLarge)
 	describeCensRequest.PageNumber = requests.NewInteger(1)
 	for {
-		raw, err := client.WithCenClient(func(cenClient *cbn.Client) (interface{}, error) {
+		raw, err := client.WithCbnClient(func(cenClient *cbn.Client) (interface{}, error) {
 			return cenClient.DescribeCens(describeCensRequest)
 		})
 		if err != nil {
@@ -89,20 +87,22 @@ func testSweepCenInstances(region string) error {
 		name := cenInstance.Name
 		cenId := cenInstance.CenId
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping CEN Instance: %s (%s)", name, cenId)
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping CEN Instance: %s (%s)", name, cenId)
+				continue
+			}
 		}
 		sweepCenInstanceIds = append(sweepCenInstanceIds, cenId)
 		describeCenAttachedChildInstancesRequest := cbn.CreateDescribeCenAttachedChildInstancesRequest()
 		describeCenAttachedChildInstancesRequest.CenId = cenId
-		raw, err := client.WithCenClient(func(cenClient *cbn.Client) (interface{}, error) {
+		raw, err := client.WithCbnClient(func(cenClient *cbn.Client) (interface{}, error) {
 			return cenClient.DescribeCenAttachedChildInstances(describeCenAttachedChildInstancesRequest)
 		})
 		if err != nil {
@@ -117,7 +117,7 @@ func testSweepCenInstances(region string) error {
 			detachCenChildInstanceRequest.ChildInstanceId = instanceId
 			detachCenChildInstanceRequest.ChildInstanceType = childInstance.ChildInstanceType
 			detachCenChildInstanceRequest.ChildInstanceRegionId = childInstance.ChildInstanceRegionId
-			_, err := client.WithCenClient(func(cenClient *cbn.Client) (interface{}, error) {
+			_, err := client.WithCbnClient(func(cenClient *cbn.Client) (interface{}, error) {
 				return cenClient.DetachCenChildInstance(detachCenChildInstanceRequest)
 			})
 			if err != nil {
@@ -137,16 +137,10 @@ func testSweepCenInstances(region string) error {
 		request["PageSize"] = PageSizeLarge
 		request["PageNumber"] = 1
 		var response map[string]interface{}
-		conn, err := client.NewCbnClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		for {
-			runtime := util.RuntimeOptions{}
-			runtime.SetAutoretry(true)
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(2*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+				response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -178,7 +172,7 @@ func testSweepCenInstances(region string) error {
 				}
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"Operation.Blocking", "InvalidOperation.ChildInstanceStatus"}) || NeedRetry(err) {
 							wait()
@@ -210,7 +204,7 @@ func testSweepCenInstances(region string) error {
 			runtime.SetAutoretry(true)
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(2*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+				response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -242,7 +236,7 @@ func testSweepCenInstances(region string) error {
 				}
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"Operation.Blocking", "Throttling.User"}) || NeedRetry(err) {
 							wait()
@@ -274,7 +268,7 @@ func testSweepCenInstances(region string) error {
 			runtime.SetAutoretry(true)
 			wait := incrementalWait(3*time.Second, 3*time.Second)
 			err = resource.Retry(2*time.Minute, func() *resource.RetryError {
-				response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+				response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -306,7 +300,7 @@ func testSweepCenInstances(region string) error {
 				}
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"Operation.Blocking", "Throttling.User"}) || NeedRetry(err) {
 							wait()
@@ -358,7 +352,7 @@ func testSweepCenInstances(region string) error {
 		for {
 			runtime := util.RuntimeOptions{}
 			runtime.SetAutoretry(true)
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 			if err != nil {
 				log.Printf("[ERROR] %s failed: %v", action, err)
 				break
@@ -378,14 +372,8 @@ func testSweepCenInstances(region string) error {
 				request["PageSize"] = PageSizeLarge
 				request["PageNumber"] = 1
 				var response map[string]interface{}
-				conn, err := client.NewCbnClient()
-				if err != nil {
-					return WrapError(err)
-				}
 				for {
-					runtime := util.RuntimeOptions{}
-					runtime.SetAutoretry(true)
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+					response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 					if err != nil {
 						log.Printf("[ERROR] %s failed: %v", action, err)
 						break
@@ -404,7 +392,7 @@ func testSweepCenInstances(region string) error {
 						request := map[string]interface{}{
 							"TransitRouterRouteTableId": id,
 						}
-						response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+						response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 						if err != nil {
 							log.Printf("[ERROR] %s failed %v", action, err)
 						}
@@ -423,7 +411,7 @@ func testSweepCenInstances(region string) error {
 				}
 				wait := incrementalWait(3*time.Second, 5*time.Second)
 				err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 					if err != nil {
 						if IsExpectedErrors(err, []string{"Operation.Blocking"}) || NeedRetry(err) {
 							wait()
@@ -449,7 +437,7 @@ func testSweepCenInstances(region string) error {
 		log.Printf("[INFO] Deleting CEN Instance: %s ", cenId)
 		deleteCenRequest := cbn.CreateDeleteCenRequest()
 		deleteCenRequest.CenId = cenId
-		_, err = client.WithCenClient(func(cenClient *cbn.Client) (interface{}, error) {
+		_, err = client.WithCbnClient(func(cenClient *cbn.Client) (interface{}, error) {
 			return cenClient.DeleteCen(deleteCenRequest)
 		})
 		if err != nil {
@@ -459,137 +447,85 @@ func testSweepCenInstances(region string) error {
 	return nil
 }
 
-func TestAccAlicloudCenInstance_basic(t *testing.T) {
-	var cen cbn.Cen
+func TestAccAliCloudCenInstance_basic0(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.CenSupportRegions)
 	resourceId := "alicloud_cen_instance.default"
-	ra := resourceAttrInit(resourceId, cenInstanceMap)
-	serviceFunc := func() interface{} {
+	ra := resourceAttrInit(resourceId, AliCloudCenInstanceMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}
-	rc := resourceCheckInit(resourceId, &cen, serviceFunc)
+	}, "DescribeCenInstance")
 	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(1000000, 9999999)
 	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
-	testAccCheck := rac.resourceAttrMapUpdateSet()
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceCenInstanceConfigDependence)
-
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCenInstanceBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, false, connectivity.CenNoSkipRegions)
 		},
-
-		// module name
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
 		CheckDestroy:  rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
+				Config: testAccConfig(map[string]interface{}{}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{}),
+				),
+			},
+			{
 				Config: testAccConfig(map[string]interface{}{
-					"cen_instance_name": name,
-					"description":       name,
+					"protection_level": "REDUCED",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"cen_instance_name": name,
-						"description":       name,
+						"protection_level": "REDUCED",
 					}),
 				),
 			},
 			{
-				ResourceName:      resourceId,
-				ImportState:       true,
-				ImportStateVerify: true,
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"cen_instance_name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"cen_instance_name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"tags": map[string]string{
 						"Created": "TF",
-						"Name":    name,
+						"For":     "Instance",
 					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"tags.%":       "2",
 						"tags.Created": "TF",
-						"tags.Name":    name,
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"cen_instance_name": name + "update",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{"cen_instance_name": name + "update"}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"description": name + "update",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{"description": name + "update"}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"cen_instance_name": name,
-					"description":       name,
-					"tags": map[string]string{
-						"Created": "TF",
-					},
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"cen_instance_name": name,
-						"description":       name,
-						"tags.%":            "1",
-						"tags.Created":      "TF",
-						"tags.Name":         REMOVEKEY,
-					}),
-				),
-			},
-		},
-	})
-}
-
-func TestAccAlicloudCenInstance_basic1(t *testing.T) {
-	var cen cbn.Cen
-	resourceId := "alicloud_cen_instance.default"
-	ra := resourceAttrInit(resourceId, cenInstanceMap)
-	serviceFunc := func() interface{} {
-		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}
-	rc := resourceCheckInit(resourceId, &cen, serviceFunc)
-	rac := resourceAttrCheckInit(rc, ra)
-	rand := acctest.RandIntRange(1000000, 9999999)
-	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
-	testAccCheck := rac.resourceAttrMapUpdateSet()
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceCenInstanceConfigDependence)
-
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() {
-			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, false, connectivity.CenNoSkipRegions)
-		},
-
-		// module name
-		IDRefreshName: resourceId,
-		Providers:     testAccProviders,
-		CheckDestroy:  rac.checkResourceDestroy(),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"name":             name,
-					"description":      name,
-					"protection_level": "REDUCED",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"name":             name,
-						"description":      name,
-						"protection_level": "REDUCED",
+						"tags.For":     "Instance",
 					}),
 				),
 			},
@@ -602,34 +538,245 @@ func TestAccAlicloudCenInstance_basic1(t *testing.T) {
 	})
 }
 
-func TestAccAlicloudCenInstance_multi(t *testing.T) {
-	var cen cbn.Cen
-	resourceId := "alicloud_cen_instance.default.4"
-	ra := resourceAttrInit(resourceId, nil)
-	serviceFunc := func() interface{} {
+func TestAccAliCloudCenInstance_basic0_twin(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.CenSupportRegions)
+	resourceId := "alicloud_cen_instance.default"
+	ra := resourceAttrInit(resourceId, AliCloudCenInstanceMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
 		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}
-	rc := resourceCheckInit(resourceId, &cen, serviceFunc)
+	}, "DescribeCenInstance")
 	rac := resourceAttrCheckInit(rc, ra)
-	rand := acctest.RandInt()
 	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCenInstanceBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, false, connectivity.CenNoSkipRegions)
 		},
-
-		// module name
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
-		CheckDestroy:  testAccCheckCenInstanceDestroy,
+		CheckDestroy:  rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCenInstanceMultiConfig(rand),
+				Config: testAccConfig(map[string]interface{}{
+					"protection_level":  "REDUCED",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+					"cen_instance_name": name,
+					"description":       name,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Instance",
+					},
+				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"cen_instance_name": fmt.Sprintf("tf-testAcc%sCenConfig-%d-4", defaultRegionToTest, rand),
-						"description":       "tf-testAccCenConfigDescription",
+						"protection_level":  "REDUCED",
+						"resource_group_id": CHECKSET,
+						"cen_instance_name": name,
+						"description":       name,
+						"tags.%":            "2",
+						"tags.Created":      "TF",
+						"tags.For":          "Instance",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccAliCloudCenInstance_basic1(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.CenSupportRegions)
+	resourceId := "alicloud_cen_instance.default"
+	ra := resourceAttrInit(resourceId, AliCloudCenInstanceMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCenInstance")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCenInstanceBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"protection_level": "REDUCED",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"protection_level": "REDUCED",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"name": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"name": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"description": name,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"description": name,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Instance",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"tags.%":       "2",
+						"tags.Created": "TF",
+						"tags.For":     "Instance",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccAliCloudCenInstance_basic1_twin(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.CenSupportRegions)
+	resourceId := "alicloud_cen_instance.default"
+	ra := resourceAttrInit(resourceId, AliCloudCenInstanceMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCenInstance")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCenInstanceBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"protection_level":  "REDUCED",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+					"name":              name,
+					"description":       name,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Instance",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"protection_level":  "REDUCED",
+						"resource_group_id": CHECKSET,
+						"name":              name,
+						"description":       name,
+						"tags.%":            "2",
+						"tags.Created":      "TF",
+						"tags.For":          "Instance",
+					}),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccAliCloudCenInstance_Multi(t *testing.T) {
+	var v map[string]interface{}
+	checkoutSupportedRegions(t, true, connectivity.CenSupportRegions)
+	resourceId := "alicloud_cen_instance.default.2"
+	ra := resourceAttrInit(resourceId, AliCloudCenInstanceMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &CbnService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeCenInstance")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAcc%sCenConfig-%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCenInstanceBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"count":             "3",
+					"protection_level":  "REDUCED",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.1.id}",
+					"cen_instance_name": name + "-${count.index}",
+					"description":       name,
+					"tags": map[string]string{
+						"Created": "TF",
+						"For":     "Instance",
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"protection_level":  "REDUCED",
+						"resource_group_id": CHECKSET,
+						"cen_instance_name": name + fmt.Sprint(-2),
+						"description":       name,
+						"tags.%":            "2",
+						"tags.Created":      "TF",
+						"tags.For":          "Instance",
 					}),
 				),
 			},
@@ -637,54 +784,24 @@ func TestAccAlicloudCenInstance_multi(t *testing.T) {
 	})
 }
 
-var cenInstanceMap = map[string]string{
-	"protection_level": "REDUCED",
-	"status":           "Active",
-	"description":      "tf-testAccCenConfigDescription",
+var AliCloudCenInstanceMap0 = map[string]string{
+	"protection_level":  CHECKSET,
+	"resource_group_id": CHECKSET,
+	"status":            CHECKSET,
 }
 
-func resourceCenInstanceConfigDependence(name string) string {
-	return ""
-}
-
-func testAccCenInstanceMultiConfig(rand int) string {
+func AliCloudCenInstanceBasicDependence0(name string) string {
 	return fmt.Sprintf(`
-	resource "alicloud_cen_instance" "default" {
-		cen_instance_name = "tf-testAcc%sCenConfig-%d-${count.index}"
-		description = "tf-testAccCenConfigDescription"
-		count = 5
-}
-`, defaultRegionToTest, rand)
-}
-
-func testAccCheckCenInstanceDestroy(s *terraform.State) error {
-	client := testAccProvider.Meta().(*connectivity.AliyunClient)
-
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "alicloud_cen_instance" {
-			continue
-		}
-
-		// Try to find the CEN
-		cbnService := CbnService{client}
-		instance, err := cbnService.DescribeCenInstance(rs.Primary.ID)
-
-		if err != nil {
-			if NotFoundError(err) {
-				continue
-			}
-			return err
-		}
-
-		if fmt.Sprint(instance["CenId"]) != "" {
-			return fmt.Errorf("CEN %s still exist", fmt.Sprint(instance["CenId"]))
-		}
+	variable "name" {
+  		default = "%s"
 	}
 
-	return nil
+	data "alicloud_resource_manager_resource_groups" "default" {
+	}
+`, name)
 }
 
-func TestUnitAlicloudCenInstance(t *testing.T) {
+func TestUnitAliCloudCenInstance(t *testing.T) {
 	p := Provider().(*schema.Provider).ResourcesMap
 	dInit, _ := schema.InternalMap(p["alicloud_cen_instance"].Schema).Data(nil, nil)
 	dExisted, _ := schema.InternalMap(p["alicloud_cen_instance"].Schema).Data(nil, nil)
@@ -760,7 +877,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudCenInstanceCreate(dInit, rawClient)
+	err = resourceAliCloudCenInstanceCreate(dInit, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	ReadMockResponseDiff = map[string]interface{}{
@@ -792,7 +909,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceCreate(dInit, rawClient)
+		err := resourceAliCloudCenInstanceCreate(dInit, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -818,7 +935,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudCenInstanceUpdate(dExisted, rawClient)
+	err = resourceAliCloudCenInstanceUpdate(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	// ModifyCenAttribute
@@ -862,7 +979,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceUpdate(dExisted, rawClient)
+		err := resourceAliCloudCenInstanceUpdate(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -931,7 +1048,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceUpdate(dExisted, rawClient)
+		err := resourceAliCloudCenInstanceUpdate(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -1000,7 +1117,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceUpdate(dExisted, rawClient)
+		err := resourceAliCloudCenInstanceUpdate(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -1039,7 +1156,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceRead(dExisted, rawClient)
+		err := resourceAliCloudCenInstanceRead(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":
@@ -1057,7 +1174,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			Message: String("loadEndpoint error"),
 		}
 	})
-	err = resourceAlicloudCenInstanceDelete(dExisted, rawClient)
+	err = resourceAliCloudCenInstanceDelete(dExisted, rawClient)
 	patches.Reset()
 	assert.NotNil(t, err)
 	errorCodes = []string{"NonRetryableError", "Throttling", "nil", "ParameterCenInstanceId"}
@@ -1079,7 +1196,7 @@ func TestUnitAlicloudCenInstance(t *testing.T) {
 			}
 			return ReadMockResponse, nil
 		})
-		err := resourceAlicloudCenInstanceDelete(dExisted, rawClient)
+		err := resourceAliCloudCenInstanceDelete(dExisted, rawClient)
 		patches.Reset()
 		switch errorCode {
 		case "NonRetryableError":

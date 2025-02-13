@@ -7,13 +7,13 @@ description: |-
   Provides a Alicloud FC Layer Version resource.
 ---
 
-# alicloud\_fc\_layer\_version
+# alicloud_fc_layer_version
 
 Provides a Function Compute Layer Version resource.
 
-For information about FC Layer Version and how to use it, see [What is Layer Version](https://www.alibabacloud.com/help/en/icms-test/latest/api-doc-pre-fc-open-2021-04-06-api-doc-createlayerversion).
+For information about FC Layer Version and how to use it, see [What is Layer Version](https://www.alibabacloud.com/help/en/fc/developer-reference/api-fc-open-2021-04-06-createlayerversion).
 
--> **NOTE:** Available in v1.180.0+.
+-> **NOTE:** Available since v1.180.0.
 
 -> **NOTE: Setting `skip_destroy` to `true` means that the Alicloud Provider will not destroy any layer version, even when running `terraform destroy`. Layer versions are thus intentional dangling resources that are not managed by Terraform and may incur extra expense in your Alicloud account.
 
@@ -21,12 +21,35 @@ For information about FC Layer Version and how to use it, see [What is Layer Ver
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_fc_layer_version&exampleId=91eb8b93-74c4-09dd-c73e-1c8b2aabeca4ffe5f7ed&activeTab=example&spm=docs.r.fc_layer_version.0.91eb8b9374&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+provider "alicloud" {
+  region = "cn-hangzhou"
+}
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
+}
+resource "alicloud_oss_bucket" "default" {
+  bucket = "terraform-example-${random_integer.default.result}"
+}
+# If you upload the function by OSS Bucket, you need to specify path can't upload by content.
+resource "alicloud_oss_bucket_object" "default" {
+  bucket  = alicloud_oss_bucket.default.id
+  key     = "index.py"
+  content = "import logging \ndef handler(event, context): \nlogger = logging.getLogger() \nlogger.info('hello world') \nreturn 'hello world'"
+}
+
 resource "alicloud_fc_layer_version" "example" {
-  layer_name         = "your_layer_name"
-  compatible_runtime = ["nodejs12"]
-  oss_bucket_name    = "your_code_oss_bucket_name"
-  oss_object_name    = "your_code_oss_object_name"
+  layer_name         = "terraform-example-${random_integer.default.result}"
+  compatible_runtime = ["python2.7"]
+  oss_bucket_name    = alicloud_oss_bucket.default.bucket
+  oss_object_name    = alicloud_oss_bucket_object.default.key
 }
 ```
 
@@ -54,7 +77,7 @@ The following attributes are exported:
 * `arn` - The arn of Layer Version.
 * `code_check_sum` - The checksum of the layer code package.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

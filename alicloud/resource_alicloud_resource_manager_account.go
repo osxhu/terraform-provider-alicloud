@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -23,7 +22,7 @@ func resourceAlicloudResourceManagerAccount() *schema.Resource {
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(3 * time.Minute),
 			Update: schema.DefaultTimeout(3 * time.Minute),
-			Delete: schema.DefaultTimeout(3 * time.Minute),
+			Delete: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
 			"account_name_prefix": {
@@ -48,7 +47,6 @@ func resourceAlicloudResourceManagerAccount() *schema.Resource {
 			"abandon_able_check_id": {
 				Type:     schema.TypeList,
 				Optional: true,
-				ForceNew: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 			"tags": tagsSchema(),
@@ -85,10 +83,7 @@ func resourceAlicloudResourceManagerAccountCreate(d *schema.ResourceData, meta i
 	var response map[string]interface{}
 	action := "CreateResourceAccount"
 	request := make(map[string]interface{})
-	conn, err := client.NewResourcemanagerClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("account_name_prefix"); ok {
 		request["AccountNamePrefix"] = v
 	}
@@ -102,9 +97,9 @@ func resourceAlicloudResourceManagerAccountCreate(d *schema.ResourceData, meta i
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-31"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("ResourceManager", "2020-03-31", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if NeedRetry(err) || IsExpectedErrors(err, []string{"ConcurrentCallNotSupported"}) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -161,10 +156,7 @@ func resourceAlicloudResourceManagerAccountRead(d *schema.ResourceData, meta int
 func resourceAlicloudResourceManagerAccountUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	resourcemanagerService := ResourcemanagerService{client}
-	conn, err := client.NewResourcemanagerClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	d.Partial(true)
 
@@ -182,7 +174,7 @@ func resourceAlicloudResourceManagerAccountUpdate(d *schema.ResourceData, meta i
 		action := "MoveAccount"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-31"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("ResourceManager", "2020-03-31", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -210,7 +202,7 @@ func resourceAlicloudResourceManagerAccountUpdate(d *schema.ResourceData, meta i
 		action := "UpdateAccount"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-31"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("ResourceManager", "2020-03-31", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -232,24 +224,22 @@ func resourceAlicloudResourceManagerAccountUpdate(d *schema.ResourceData, meta i
 
 func resourceAlicloudResourceManagerAccountDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
+	resourcemanagerService := ResourcemanagerService{client}
 	action := "DeleteAccount"
 	var response map[string]interface{}
-	conn, err := client.NewResourcemanagerClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	request := map[string]interface{}{
 		"AccountId": d.Id(),
 	}
 
 	if v, ok := d.GetOk("abandon_able_check_id"); ok {
-		request["AbandonableCheckId"] = v
+		request["AbandonableCheckId"] = convertListToJsonString(v.([]interface{}))
 	}
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-31"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("ResourceManager", "2020-03-31", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -263,6 +253,12 @@ func resourceAlicloudResourceManagerAccountDelete(d *schema.ResourceData, meta i
 
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+	}
+
+	// Since some accounts have a silent deletion period, 'deleting' will be considered as a successful deletion.
+	stateConf := BuildStateConf([]string{"Checking"}, []string{"Success", "Deleting"}, d.Timeout(schema.TimeoutDelete), 5*time.Second, resourcemanagerService.AccountDeletionStateRefreshFunc(d.Id(), []string{"CheckFailed", "DeleteFailed"}))
+	if _, err := stateConf.WaitForState(); err != nil {
+		return WrapErrorf(err, IdMsg, d.Id())
 	}
 
 	return nil

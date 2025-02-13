@@ -5,7 +5,6 @@ import (
 	"regexp"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
@@ -19,7 +18,6 @@ func dataSourceAlicloudMseClusters() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ValidateFunc: validation.ValidateRegexp,
-				ForceNew:     true,
 			},
 			"cluster_alias_name": {
 				Type:     schema.TypeString,
@@ -41,12 +39,10 @@ func dataSourceAlicloudMseClusters() *schema.Resource {
 			"request_pars": {
 				Type:     schema.TypeString,
 				Optional: true,
-				ForceNew: true,
 			},
 			"status": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ForceNew:     true,
 				ValidateFunc: validation.StringInSlice([]string{"DESTROY_FAILED", "DESTROY_ING", "DESTROY_SUCCESS", "INIT_FAILED", "INIT_ING", "INIT_SUCCESS", "INIT_TIME_OUT", "RESTART_FAILED", "RESTART_ING", "RESTART_SUCCESS", "SCALE_FAILED", "SCALE_ING", "SCALE_SUCCESS"}, false),
 			},
 			"output_file": {
@@ -229,14 +225,9 @@ func dataSourceAlicloudMseClustersRead(d *schema.ResourceData, meta interface{})
 	}
 	status, statusOk := d.GetOk("status")
 	var response map[string]interface{}
-	conn, err := client.NewMseClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2019-05-31"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("mse", "2019-05-31", action, request, nil)
 		if err != nil {
 			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_mse_clusters", action, AlibabaCloudSdkGoERROR)
 		}

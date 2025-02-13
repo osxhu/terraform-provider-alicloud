@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -26,13 +25,13 @@ func resourceAlicloudRdsParameterGroup() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"mariadb", "mysql"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"mariadb", "mysql", "PostgreSQL"}, false),
 			},
 			"engine_version": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"10.3", "5.1", "5.5", "5.6", "5.7", "8.0"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"10.3", "5.1", "5.5", "5.6", "5.7", "8.0", "10.0", "11.0", "12.0", "13.0", "14.0", "15.0"}, false),
 			},
 			"param_detail": {
 				Type:     schema.TypeSet,
@@ -68,10 +67,7 @@ func resourceAlicloudRdsParameterGroupCreate(d *schema.ResourceData, meta interf
 	action := "CreateParameterGroup"
 	request := make(map[string]interface{})
 	request["SourceIp"] = client.SourceIp
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["Engine"] = d.Get("engine")
 	request["EngineVersion"] = d.Get("engine_version")
 	list := d.Get("param_detail").(*schema.Set).List()
@@ -90,7 +86,7 @@ func resourceAlicloudRdsParameterGroupCreate(d *schema.ResourceData, meta interf
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -142,10 +138,7 @@ func resourceAlicloudRdsParameterGroupRead(d *schema.ResourceData, meta interfac
 }
 func resourceAlicloudRdsParameterGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	update := false
 	request := map[string]interface{}{
@@ -176,7 +169,7 @@ func resourceAlicloudRdsParameterGroupUpdate(d *schema.ResourceData, meta interf
 		action := "ModifyParameterGroup"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -197,10 +190,7 @@ func resourceAlicloudRdsParameterGroupDelete(d *schema.ResourceData, meta interf
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteParameterGroup"
 	var response map[string]interface{}
-	conn, err := client.NewRdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"ParameterGroupId": d.Id(),
 		"SourceIp":         client.SourceIp,
@@ -209,7 +199,7 @@ func resourceAlicloudRdsParameterGroupDelete(d *schema.ResourceData, meta interf
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-08-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

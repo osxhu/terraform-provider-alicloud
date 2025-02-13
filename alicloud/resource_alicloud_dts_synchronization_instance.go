@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -50,10 +49,11 @@ func resourceAlicloudDtsSynchronizationInstance() *schema.Resource {
 				ValidateFunc: validation.StringInSlice([]string{"bidirectional", "oneway"}, false),
 			},
 			"destination_endpoint_engine_name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"MySQL", "PolarDB", "polardb_o", "polardb_pg", "Redis", "DRDS", "PostgreSQL", "odps", "oracle", "mongodb", "tidb", "ADS", "ADB30", "Greenplum", "MSSQL", "kafka", "DataHub", "clickhouse", "DB2", "as400", "Tablestore"}, false),
+				Type:             schema.TypeString,
+				Required:         true,
+				ForceNew:         true,
+				ValidateFunc:     validation.StringInSlice([]string{"MySQL", "PolarDB", "polardb_o", "polardb_pg", "Redis", "DRDS", "PostgreSQL", "odps", "oracle", "mongodb", "tidb", "ADS", "ADB30", "Greenplum", "MSSQL", "kafka", "DataHub", "clickhouse", "DB2", "as400", "Tablestore"}, true),
+				DiffSuppressFunc: UpperLowerCaseDiffSuppressFunc,
 			},
 			"destination_endpoint_region": {
 				Type:     schema.TypeString,
@@ -61,10 +61,11 @@ func resourceAlicloudDtsSynchronizationInstance() *schema.Resource {
 				ForceNew: true,
 			},
 			"source_endpoint_engine_name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"MySQL", "PolarDB", "polardb_o", "polardb_pg", "Redis", "DRDS", "PostgreSQL", "odps", "oracle", "mongodb", "tidb", "ADS", "ADB30", "Greenplum", "MSSQL", "kafka", "DataHub", "clickhouse", "DB2", "as400", "Tablestore"}, false),
+				Type:             schema.TypeString,
+				Required:         true,
+				ForceNew:         true,
+				ValidateFunc:     validation.StringInSlice([]string{"MySQL", "PolarDB", "polardb_o", "polardb_pg", "Redis", "DRDS", "PostgreSQL", "odps", "oracle", "mongodb", "tidb", "ADS", "ADB30", "Greenplum", "MSSQL", "kafka", "DataHub", "clickhouse", "DB2", "as400", "Tablestore"}, true),
+				DiffSuppressFunc: UpperLowerCaseDiffSuppressFunc,
 			},
 			"source_endpoint_region": {
 				Type:     schema.TypeString,
@@ -105,10 +106,7 @@ func resourceAlicloudDtsSynchronizationInstanceCreate(d *schema.ResourceData, me
 	var response map[string]interface{}
 	action := "CreateDtsInstance"
 	request := make(map[string]interface{})
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	request["AutoPay"] = false
 	request["AutoStart"] = true
@@ -159,7 +157,7 @@ func resourceAlicloudDtsSynchronizationInstanceCreate(d *schema.ResourceData, me
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -219,10 +217,7 @@ func resourceAlicloudDtsSynchronizationInstanceDelete(d *schema.ResourceData, me
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteSynchronizationJob"
 	var response map[string]interface{}
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"SynchronizationJobId": d.Id(),
 	}
@@ -230,7 +225,7 @@ func resourceAlicloudDtsSynchronizationInstanceDelete(d *schema.ResourceData, me
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

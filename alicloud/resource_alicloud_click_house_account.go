@@ -6,9 +6,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
-
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -37,12 +34,12 @@ func resourceAlicloudClickHouseAccount() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringMatch(regexp.MustCompile(`^[a-z][a-z0-9_]{1,15}`), "The account_name most consist of lowercase letters, numbers, and underscores, starting with a lowercase letter"),
+				ValidateFunc: StringMatch(regexp.MustCompile(`^[a-z][a-z0-9_]{1,15}`), "The account_name most consist of lowercase letters, numbers, and underscores, starting with a lowercase letter"),
 			},
 			"account_password": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ValidateFunc: validation.StringMatch(regexp.MustCompile(`[a-zA-Z!#$%^&*()_+-=]{8,32}`), "account_password must consist of uppercase letters, lowercase letters, numbers, and special characters"),
+				ValidateFunc: StringMatch(regexp.MustCompile(`[a-zA-Z!#$%^&*()_+-=]{8,32}`), "account_password must consist of uppercase letters, lowercase letters, numbers, and special characters"),
 			},
 			"db_cluster_id": {
 				Type:     schema.TypeString,
@@ -54,14 +51,16 @@ func resourceAlicloudClickHouseAccount() *schema.Resource {
 				Computed: true,
 			},
 			"type": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				ValidateFunc: StringInSlice([]string{"Normal", "Super"}, false),
 			},
 			"dml_authority": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"all", "readOnly,modify"}, false),
+				ValidateFunc: StringInSlice([]string{"all", "readOnly,modify"}, false),
 			},
 			"ddl_authority": {
 				Type:     schema.TypeBool,
@@ -74,9 +73,10 @@ func resourceAlicloudClickHouseAccount() *schema.Resource {
 				Computed: true,
 			},
 			"total_databases": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:       schema.TypeString,
+				Optional:   true,
+				Computed:   true,
+				Deprecated: "Field 'total_databases' has been deprecated from version 1.223.1 and it will be removed in the future version.",
 			},
 			"allow_dictionaries": {
 				Type:     schema.TypeString,
@@ -84,9 +84,10 @@ func resourceAlicloudClickHouseAccount() *schema.Resource {
 				Computed: true,
 			},
 			"total_dictionaries": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:       schema.TypeString,
+				Optional:   true,
+				Computed:   true,
+				Deprecated: "Field 'total_dictionaries' has been deprecated from version 1.223.1 and it will be removed in the future version.",
 			},
 		},
 	}
@@ -97,19 +98,20 @@ func resourceAlicloudClickHouseAccountCreate(d *schema.ResourceData, meta interf
 	var response map[string]interface{}
 	action := "CreateAccount"
 	request := make(map[string]interface{})
-	conn, err := client.NewClickhouseClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("account_description"); ok {
 		request["AccountDescription"] = v
 	}
 	request["AccountName"] = d.Get("account_name")
 	request["AccountPassword"] = d.Get("account_password")
 	request["DBClusterId"] = d.Get("db_cluster_id")
+	if d.Get("type") == "Super" {
+		action = "CreateSQLAccount"
+		request["AccountType"] = d.Get("type")
+	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-11"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("clickhouse", "2019-11-11", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"IncorrectAccountStatus", "IncorrectDBInstanceState"}) || NeedRetry(err) {
 				wait()
@@ -158,6 +160,9 @@ func resourceAlicloudClickHouseAccountRead(d *schema.ResourceData, meta interfac
 	d.Set("allow_dictionaries", convertArrayToString(authority["AllowDictionaries"], ","))
 	d.Set("total_databases", convertArrayToString(authority["TotalDatabases"], ","))
 	d.Set("total_dictionaries", convertArrayToString(authority["TotalDictionaries"], ","))
+	if err != nil {
+		return WrapError(err)
+	}
 
 	return nil
 }
@@ -165,10 +170,6 @@ func resourceAlicloudClickHouseAccountUpdate(d *schema.ResourceData, meta interf
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
 	parts, err := ParseResourceId(d.Id(), 2)
-	if err != nil {
-		return WrapError(err)
-	}
-	conn, err := client.NewClickhouseClient()
 	if err != nil {
 		return WrapError(err)
 	}
@@ -189,7 +190,7 @@ func resourceAlicloudClickHouseAccountUpdate(d *schema.ResourceData, meta interf
 		action := "ModifyAccountDescription"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-11"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("clickhouse", "2019-11-11", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"IncorrectAccountStatus", "IncorrectDBInstanceState"}) || NeedRetry(err) {
 					wait()
@@ -218,7 +219,7 @@ func resourceAlicloudClickHouseAccountUpdate(d *schema.ResourceData, meta interf
 		action := "ResetAccountPassword"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-11"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("clickhouse", "2019-11-11", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"IncorrectAccountStatus", "IncorrectDBInstanceState"}) || NeedRetry(err) {
 					wait()
@@ -287,7 +288,7 @@ func resourceAlicloudClickHouseAccountUpdate(d *schema.ResourceData, meta interf
 		action := "ModifyAccountAuthority"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-11"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("clickhouse", "2019-11-11", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"IncorrectAccountStatus", "IncorrectDBInstanceState"}) || NeedRetry(err) {
 					wait()
@@ -316,10 +317,6 @@ func resourceAlicloudClickHouseAccountDelete(d *schema.ResourceData, meta interf
 	}
 	action := "DeleteAccount"
 	var response map[string]interface{}
-	conn, err := client.NewClickhouseClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	request := map[string]interface{}{
 		"AccountName": parts[1],
 		"DBClusterId": parts[0],
@@ -327,7 +324,7 @@ func resourceAlicloudClickHouseAccountDelete(d *schema.ResourceData, meta interf
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-11-11"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("clickhouse", "2019-11-11", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"IncorrectAccountStatus", "IncorrectDBInstanceState"}) || NeedRetry(err) {
 				wait()

@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -86,9 +85,6 @@ func resourceAlicloudSlbLoadBalancer() *schema.Resource {
 					if v, ok := d.GetOk("payment_type"); ok && v.(string) == "Subscription" {
 						return true
 					}
-					if v, ok := d.GetOk("instance_charge_type"); ok && v.(string) == "PrePaid" {
-						return true
-					}
 					return false
 				},
 			},
@@ -121,16 +117,28 @@ func resourceAlicloudSlbLoadBalancer() *schema.Resource {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Computed:      true,
-				ValidateFunc:  validation.StringInSlice([]string{"slb.s1.small", "slb.s2.medium", "slb.s2.small", "slb.s3.large", "slb.s3.medium", "slb.s3.small", "slb.s4.large"}, false),
+				ValidateFunc:  validation.StringInSlice([]string{"slb.s1.small", "slb.s2.medium", "slb.s2.small", "slb.s3.large", "slb.s3.medium", "slb.s3.small", "slb.s4.large", "slb.lcu.elastic"}, false),
 				ConflictsWith: []string{"specification"},
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if v, ok := d.GetOk("instance_charge_type"); ok && v.(string) == "PayByCLCU" {
+						return true
+					}
+					return false
+				},
 			},
 			"specification": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Computed:      true,
-				ValidateFunc:  validation.StringInSlice([]string{"slb.s1.small", "slb.s2.medium", "slb.s2.small", "slb.s3.large", "slb.s3.medium", "slb.s3.small", "slb.s4.large"}, false),
+				ValidateFunc:  validation.StringInSlice([]string{"slb.s1.small", "slb.s2.medium", "slb.s2.small", "slb.s3.large", "slb.s3.medium", "slb.s3.small", "slb.s4.large", "slb.lcu.elastic"}, false),
 				Deprecated:    "Field 'specification' has been deprecated from provider version 1.123.1. New field 'load_balancer_spec' instead",
 				ConflictsWith: []string{"load_balancer_spec"},
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if v, ok := d.GetOk("instance_charge_type"); ok && v.(string) == "PayByCLCU" {
+						return true
+					}
+					return false
+				},
 			},
 			"master_zone_id": {
 				Type:     schema.TypeString,
@@ -161,17 +169,22 @@ func resourceAlicloudSlbLoadBalancer() *schema.Resource {
 				ValidateFunc:     validation.Any(validation.IntBetween(1, 9), validation.IntInSlice([]int{12, 24, 36})),
 			},
 			"payment_type": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				Computed:      true,
-				ValidateFunc:  validation.StringInSlice([]string{"PayAsYouGo", "Subscription"}, false),
-				ConflictsWith: []string{"instance_charge_type"},
+				Type:         schema.TypeString,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: validation.StringInSlice([]string{"PayAsYouGo", "Subscription"}, false),
 			},
 			"instance_charge_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
 				ValidateFunc: validation.StringInSlice([]string{"PayBySpec", "PayByCLCU"}, false),
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if v, ok := d.GetOk("payment_type"); !ok || v.(string) == "PayAsYouGo" {
+						return false
+					}
+					return true
+				},
 			},
 			"resource_group_id": {
 				Type:     schema.TypeString,
@@ -189,9 +202,9 @@ func resourceAlicloudSlbLoadBalancer() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"active", "inactive"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"active", "inactive", "locked"}, false),
 			},
-			"tags": tagsSchema(),
+			"tags": tagsSchemaComputed(),
 			"vswitch_id": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -213,10 +226,7 @@ func resourceAlicloudSlbLoadBalancerCreate(d *schema.ResourceData, meta interfac
 	var response map[string]interface{}
 	action := "CreateLoadBalancer"
 	request := make(map[string]interface{})
-	conn, err := client.NewSlbClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("address"); ok {
 		request["Address"] = v
 	}
@@ -304,11 +314,9 @@ func resourceAlicloudSlbLoadBalancerCreate(d *schema.ResourceData, meta interfac
 		request["VSwitchId"] = vswitchId
 	}
 	request["ClientToken"] = buildClientToken("CreateLoadBalancer")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 10*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"OperationFailed.TokenIsProcessing"}) || NeedRetry(err) {
 				wait()
@@ -374,6 +382,7 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	client := meta.(*connectivity.AliyunClient)
 	slbService := SlbService{client}
 	var response map[string]interface{}
+	var err error
 	d.Partial(true)
 
 	if d.HasChange("tags") {
@@ -388,13 +397,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 		}
 		request["LoadBalancerStatus"] = d.Get("status")
 		action := "SetLoadBalancerStatus"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -417,13 +422,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 		request["DeleteProtection"] = d.Get("delete_protection")
 		request["RegionId"] = client.RegionId
 		action := "SetLoadBalancerDeleteProtection"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -453,13 +454,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	request["RegionId"] = client.RegionId
 	if update {
 		action := "SetLoadBalancerName"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -477,6 +474,35 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 		d.SetPartial("load_balancer_name")
 	}
 	update = false
+	modifyLoadBalancerInstanceChargeTypeReq := map[string]interface{}{
+		"LoadBalancerId": d.Id(),
+	}
+	if !d.IsNewResource() && d.HasChange("instance_charge_type") {
+		update = true
+		modifyLoadBalancerInstanceChargeTypeReq["InstanceChargeType"] = d.Get("instance_charge_type")
+	}
+	modifyLoadBalancerInstanceChargeTypeReq["RegionId"] = client.RegionId
+	if update {
+		action := "ModifyLoadBalancerInstanceChargeType"
+		wait := incrementalWait(3*time.Second, 3*time.Second)
+		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, modifyLoadBalancerInstanceChargeTypeReq, false)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return resource.RetryableError(err)
+				}
+				return resource.NonRetryableError(err)
+			}
+			addDebug(action, response, modifyLoadBalancerInstanceChargeTypeReq)
+			return nil
+		})
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+		}
+		d.SetPartial("instance_charge_type")
+	}
+	update = false
 	modifyLoadBalancerInstanceSpecReq := map[string]interface{}{
 		"LoadBalancerId": d.Id(),
 	}
@@ -490,13 +516,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	modifyLoadBalancerInstanceSpecReq["RegionId"] = client.RegionId
 	if update {
 		action := "ModifyLoadBalancerInstanceSpec"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, modifyLoadBalancerInstanceSpecReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, modifyLoadBalancerInstanceSpecReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -528,13 +550,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	}
 	if update {
 		action := "SetLoadBalancerModificationProtection"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, setLoadBalancerModificationProtectionReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, setLoadBalancerModificationProtectionReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -566,13 +584,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	modifyLoadBalancerInternetSpecReq["RegionId"] = client.RegionId
 	if update {
 		action := "ModifyLoadBalancerInternetSpec"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, modifyLoadBalancerInternetSpecReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, modifyLoadBalancerInternetSpecReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -598,10 +612,6 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 		update = true
 		modifyLoadBalancerPayTypeReq["PayType"] = convertSlbLoadBalancerPaymentTypeRequest(d.Get("payment_type").(string))
 	}
-	if !d.IsNewResource() && d.HasChange("instance_charge_type") {
-		update = true
-		modifyLoadBalancerPayTypeReq["PayType"] = convertSlbLoadBalancerInstanceChargeTypeRequest(d.Get("instance_charge_type").(string))
-	}
 	if v, ok := modifyLoadBalancerPayTypeReq["PayType"]; ok && v.(string) == "PrePay" {
 		period := 1
 		if v, ok := d.GetOk("period"); ok {
@@ -617,13 +627,9 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 	}
 	if update {
 		action := "ModifyLoadBalancerPayType"
-		conn, err := client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, modifyLoadBalancerPayTypeReq, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Slb", "2014-05-15", action, nil, modifyLoadBalancerPayTypeReq, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -637,7 +643,6 @@ func resourceAlicloudSlbLoadBalancerUpdate(d *schema.ResourceData, meta interfac
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
-		d.SetPartial("instance_charge_type")
 		d.SetPartial("payment_type")
 	}
 	d.Partial(false)
@@ -652,10 +657,7 @@ func resourceAlicloudSlbLoadBalancerDelete(d *schema.ResourceData, meta interfac
 	slbService := SlbService{client}
 	action := "DeleteLoadBalancer"
 	var response map[string]interface{}
-	conn, err := client.NewSlbClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"LoadBalancerId": d.Id(),
 	}
@@ -663,7 +665,7 @@ func resourceAlicloudSlbLoadBalancerDelete(d *schema.ResourceData, meta interfac
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

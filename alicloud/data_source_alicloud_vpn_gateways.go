@@ -3,12 +3,13 @@ package alicloud
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -18,7 +19,7 @@ import (
 
 func dataSourceAlicloudVpnGateways() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceAlicloudVpnsRead,
+		Read: dataSourceAlicloudVpnGatewaysRead,
 
 		Schema: map[string]*schema.Schema{
 			"ids": {
@@ -67,6 +68,12 @@ func dataSourceAlicloudVpnGateways() *schema.Resource {
 				Optional:   true,
 				ForceNew:   true,
 				Deprecated: "Field 'enable_ipsec' has been deprecated from provider version 1.193.0 and it will be removed in the future version.",
+			},
+			"ssl_vpn": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				ValidateFunc: validation.StringInSlice([]string{"enable", "disable"}, false),
 			},
 			"include_reservation_data": {
 				Type:     schema.TypeBool,
@@ -136,11 +143,47 @@ func dataSourceAlicloudVpnGateways() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
+						"ssl_vpn": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
 						"ssl_connections": {
 							Type:     schema.TypeInt,
 							Computed: true,
 						},
 						"network_type": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"auto_propagate": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"disaster_recovery_vswitch_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"disaster_recovery_internet_ip": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"vpn_type": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"tags": {
+							Type:     schema.TypeMap,
+							Computed: true,
+						},
+						"ssl_vpn_internet_ip": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"vswitch_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"resource_group_id": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
@@ -151,7 +194,7 @@ func dataSourceAlicloudVpnGateways() *schema.Resource {
 	}
 }
 
-func dataSourceAlicloudVpnsRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceAlicloudVpnGatewaysRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 
 	action := "DescribeVpnGateways"
@@ -194,20 +237,14 @@ func dataSourceAlicloudVpnsRead(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
-
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var err error
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	request["PageNumber"] = 1
 	request["PageSize"] = PageSizeLarge
 
 	for {
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -247,29 +284,72 @@ func dataSourceAlicloudVpnsRead(d *schema.ResourceData, meta interface{}) error 
 		request["PageNumber"] = request["PageNumber"].(int) + 1
 	}
 
+	sslVpn := d.Get("ssl_vpn").(string)
 	ids := make([]string, 0)
 	names := make([]interface{}, 0)
 	s := make([]map[string]interface{}, 0)
 	for _, object := range objects {
-		createTime, _ := object["CreateTime"].(json.Number).Int64()
-		endTime, _ := object["EndTime"].(json.Number).Int64()
-		mapping := map[string]interface{}{
-			"id":                   object["VpnGatewayId"],
-			"vpc_id":               object["VpcId"],
-			"internet_ip":          object["InternetIp"],
-			"create_time":          TimestampToStr(createTime),
-			"end_time":             TimestampToStr(endTime),
-			"specification":        object["Spec"],
-			"name":                 object["Name"],
-			"description":          object["Description"],
-			"status":               convertStatus(object["Status"].(string)),
-			"business_status":      object["BusinessStatus"],
-			"instance_charge_type": convertChargeType(object["ChargeType"].(string)),
-			"enable_ipsec":         object["IpsecVpn"],
-			"enable_ssl":           object["SslVpn"],
-			"ssl_connections":      object["SslMaxConnections"],
-			"network_type":         object["NetworkType"],
+		if sslVpn != "" && sslVpn != fmt.Sprint(object["SslVpn"]) {
+			continue
 		}
+		mapping := map[string]interface{}{
+			"id":                            object["VpnGatewayId"],
+			"vpc_id":                        object["VpcId"],
+			"internet_ip":                   object["InternetIp"],
+			"specification":                 object["Spec"],
+			"name":                          object["Name"],
+			"description":                   object["Description"],
+			"status":                        convertStatus(object["Status"].(string)),
+			"business_status":               object["BusinessStatus"],
+			"instance_charge_type":          convertChargeType(object["ChargeType"].(string)),
+			"enable_ipsec":                  object["IpsecVpn"],
+			"enable_ssl":                    object["SslVpn"],
+			"ssl_vpn":                       object["SslVpn"],
+			"ssl_connections":               object["SslMaxConnections"],
+			"network_type":                  object["NetworkType"],
+			"disaster_recovery_vswitch_id":  object["DisasterRecoveryVSwitchId"],
+			"disaster_recovery_internet_ip": object["DisasterRecoveryInternetIp"],
+			"vpn_type":                      object["VpnType"],
+			"ssl_vpn_internet_ip":           object["SslVpnInternetIp"],
+			"vswitch_id":                    object["VSwitchId"],
+			"resource_group_id":             object["ResourceGroupId"],
+		}
+
+		tags := make(map[string]interface{})
+		t, _ := jsonpath.Get("$.Tags.Tag", object)
+		if t != nil {
+			for _, t := range t.([]interface{}) {
+				key := t.(map[string]interface{})["Key"].(string)
+				value := t.(map[string]interface{})["Value"].(string)
+				if !ignoredTags(key, value) {
+					tags[key] = value
+				}
+			}
+		}
+		mapping["tags"] = tags
+
+		if v, ok := object["CreateTime"]; ok {
+			createTime, err := v.(json.Number).Int64()
+			if err != nil {
+				log.Println(WrapError(err))
+			} else {
+				mapping["create_time"] = TimestampToStr(createTime)
+			}
+		}
+		if v, ok := object["EndTime"]; ok {
+			endTime, err := v.(json.Number).Int64()
+			if err != nil {
+				log.Println(WrapError(err))
+			} else {
+				mapping["end_time"] = TimestampToStr(endTime)
+			}
+		}
+		if v, ok := object["AutoPropagate"]; ok {
+			if valueBool, ok := v.(bool); ok {
+				mapping["auto_propagate"] = strconv.FormatBool(valueBool)
+			}
+		}
+
 		ids = append(ids, fmt.Sprint(mapping["id"]))
 		names = append(names, object["Name"])
 		s = append(s, mapping)

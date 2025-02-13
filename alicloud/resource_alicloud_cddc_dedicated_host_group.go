@@ -5,9 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
-
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -27,13 +24,13 @@ func resourceAlicloudCddcDedicatedHostGroup() *schema.Resource {
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Evenly", "Intensively"}, false),
+				ValidateFunc: StringInSlice([]string{"Evenly", "Intensively"}, false),
 			},
 			"cpu_allocation_ratio": {
 				Type:         schema.TypeInt,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validation.IntBetween(100, 300),
+				ValidateFunc: IntBetween(100, 300),
 			},
 			"dedicated_host_group_desc": {
 				Type:     schema.TypeString,
@@ -43,13 +40,16 @@ func resourceAlicloudCddcDedicatedHostGroup() *schema.Resource {
 				Type:         schema.TypeInt,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validation.IntBetween(100, 300),
+				ValidateFunc: IntBetween(100, 300),
 			},
 			"engine": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Redis", "SQLServer", "MySQL", "PostgreSQL", "MongoDB"}, false),
+				ValidateFunc: StringInSlice([]string{"Redis", "SQLServer", "MySQL", "PostgreSQL", "MongoDB", "alisql", "tair", "mssql"}, false),
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					return d.Id() != "" && new == "SQLServer"
+				},
 			},
 			"host_replace_policy": {
 				Type:     schema.TypeString,
@@ -60,7 +60,7 @@ func resourceAlicloudCddcDedicatedHostGroup() *schema.Resource {
 				Type:         schema.TypeInt,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validation.IntBetween(0, 100),
+				ValidateFunc: IntBetween(0, 100),
 			},
 			"vpc_id": {
 				Type:     schema.TypeString,
@@ -82,10 +82,7 @@ func resourceAlicloudCddcDedicatedHostGroupCreate(d *schema.ResourceData, meta i
 	var response map[string]interface{}
 	action := "CreateDedicatedHostGroup"
 	request := make(map[string]interface{})
-	conn, err := client.NewCddcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("allocation_policy"); ok {
 		request["AllocationPolicy"] = v
 	}
@@ -114,11 +111,9 @@ func resourceAlicloudCddcDedicatedHostGroupCreate(d *schema.ResourceData, meta i
 	request["RegionId"] = client.RegionId
 	request["VPCId"] = d.Get("vpc_id")
 	request["ClientToken"] = buildClientToken("CreateDedicatedHostGroup")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-20"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("cddc", "2020-03-20", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -170,6 +165,7 @@ func resourceAlicloudCddcDedicatedHostGroupRead(d *schema.ResourceData, meta int
 func resourceAlicloudCddcDedicatedHostGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
+	var err error
 	update := false
 	request := map[string]interface{}{
 		"DedicatedHostGroupId": d.Id(),
@@ -213,13 +209,9 @@ func resourceAlicloudCddcDedicatedHostGroupUpdate(d *schema.ResourceData, meta i
 	}
 	if update {
 		action := "ModifyDedicatedHostGroupAttribute"
-		conn, err := client.NewCddcClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("cddc", "2020-03-20", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -240,10 +232,7 @@ func resourceAlicloudCddcDedicatedHostGroupDelete(d *schema.ResourceData, meta i
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteDedicatedHostGroup"
 	var response map[string]interface{}
-	conn, err := client.NewCddcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"DedicatedHostGroupId": d.Id(),
 	}
@@ -251,7 +240,7 @@ func resourceAlicloudCddcDedicatedHostGroupDelete(d *schema.ResourceData, meta i
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-03-20"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("cddc", "2020-03-20", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -274,8 +263,6 @@ func convertCddcDedicatedHostGroupEngineResponse(engine interface{}) string {
 		engine = "MySQL"
 	case "redis":
 		engine = "Redis"
-	case "mssql":
-		engine = "SQLServer"
 	case "pgsql":
 		engine = "PostgreSQL"
 	case "mongodb":

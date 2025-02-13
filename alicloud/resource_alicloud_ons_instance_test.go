@@ -51,11 +51,7 @@ func testSweepOnsInstance(region string) error {
 	action := "OnsInstanceInServiceList"
 	request := make(map[string]interface{})
 	var response map[string]interface{}
-	conn, err := client.NewOnsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 	if err != nil {
 		log.Printf("[ERROR] Failed to retrieve ONS instance in service list: %s", err)
 	}
@@ -70,27 +66,25 @@ func testSweepOnsInstance(region string) error {
 		item := v.(map[string]interface{})
 		name := item["InstanceName"].(string)
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping ons instance: %s ", name)
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping ons instance: %s ", name)
+				continue
+			}
 		}
 		log.Printf("[INFO] delete ons instance: %s ", name)
 
-		conn, err := client.NewOnsClient()
-		if err != nil {
-			return WrapError(err)
-		}
 		action := "OnsInstanceDelete"
 		request := map[string]interface{}{
 			"InstanceId": item["InstanceId"],
 		}
-		_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		_, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 		if err != nil {
 			log.Printf("[ERROR] Failed to delete ons instance (%s): %s", name, err)
 		}

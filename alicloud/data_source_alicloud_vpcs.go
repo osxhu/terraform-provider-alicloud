@@ -5,7 +5,6 @@ import (
 	"regexp"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
@@ -111,6 +110,18 @@ func dataSourceAlicloudVpcs() *schema.Resource {
 							Computed: true,
 						},
 						"description": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"dhcp_options_set_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"dhcp_options_set_status": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"dns_hostname_status": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
@@ -254,14 +265,9 @@ func dataSourceAlicloudVpcsRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	status, statusOk := d.GetOk("status")
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, true)
 		if err != nil {
 			return WrapErrorf(err, DataDefaultErrorMsg, "alicloud_vpcs", action, AlibabaCloudSdkGoERROR)
 		}
@@ -310,36 +316,28 @@ func dataSourceAlicloudVpcsRead(d *schema.ResourceData, meta interface{}) error 
 	for _, v := range objects {
 		object := v.(map[string]interface{})
 		mapping := map[string]interface{}{
-			"region_id":             object["RegionId"],
-			"creation_time":         object["CreationTime"],
-			"cidr_block":            object["CidrBlock"],
-			"description":           object["Description"],
-			"ipv6_cidr_block":       object["Ipv6CidrBlock"],
-			"is_default":            object["IsDefault"],
-			"resource_group_id":     object["ResourceGroupId"],
-			"router_id":             object["VRouterId"],
-			"vrouter_id":            object["VRouterId"],
-			"secondary_cidr_blocks": object["SecondaryCidrBlocks"].(map[string]interface{})["SecondaryCidrBlock"],
-			"status":                object["Status"],
-			"user_cidrs":            object["UserCidrs"].(map[string]interface{})["UserCidr"],
-			"vswitch_ids":           object["VSwitchIds"].(map[string]interface{})["VSwitchId"],
-			"id":                    fmt.Sprint(object["VpcId"]),
-			"vpc_id":                fmt.Sprint(object["VpcId"]),
-			"vpc_name":              object["VpcName"],
+			"region_id":               object["RegionId"],
+			"creation_time":           object["CreationTime"],
+			"cidr_block":              object["CidrBlock"],
+			"description":             object["Description"],
+			"dhcp_options_set_id":     object["DhcpOptionsSetId"],
+			"dhcp_options_set_status": object["DhcpOptionsSetStatus"],
+			"dns_hostname_status":     object["DnsHostnameStatus"],
+			"ipv6_cidr_block":         object["Ipv6CidrBlock"],
+			"is_default":              object["IsDefault"],
+			"resource_group_id":       object["ResourceGroupId"],
+			"router_id":               object["VRouterId"],
+			"vrouter_id":              object["VRouterId"],
+			"secondary_cidr_blocks":   object["SecondaryCidrBlocks"].(map[string]interface{})["SecondaryCidrBlock"],
+			"status":                  object["Status"],
+			"user_cidrs":              object["UserCidrs"].(map[string]interface{})["UserCidr"],
+			"vswitch_ids":             object["VSwitchIds"].(map[string]interface{})["VSwitchId"],
+			"id":                      fmt.Sprint(object["VpcId"]),
+			"vpc_id":                  fmt.Sprint(object["VpcId"]),
+			"vpc_name":                object["VpcName"],
 		}
-
-		tags := make(map[string]interface{})
-		t, _ := jsonpath.Get("$.Tags.Tag", object)
-		if t != nil {
-			for _, t := range t.([]interface{}) {
-				key := t.(map[string]interface{})["Key"].(string)
-				value := t.(map[string]interface{})["Value"].(string)
-				if !ignoredTags(key, value) {
-					tags[key] = value
-				}
-			}
-		}
-		mapping["tags"] = tags
+		tagsMaps, _ := jsonpath.Get("$.Tags.Tag", object)
+		mapping["tags"] = tagsToMap(tagsMaps)
 		if detailedEnabled := d.Get("enable_details"); !detailedEnabled.(bool) {
 			ids = append(ids, fmt.Sprint(object["VpcId"]))
 			names = append(names, object["VpcName"])

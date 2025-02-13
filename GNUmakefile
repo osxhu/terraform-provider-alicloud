@@ -2,6 +2,8 @@ TEST?=$$(go list ./... |grep -v 'vendor')
 GOFMT_FILES?=$$(find . -name '*.go' |grep -v vendor)
 WEBSITE_REPO=github.com/hashicorp/terraform-website
 PKG_NAME=alicloud
+RELEASE_ALPHA_VERSION=$(VERSION)-alpha$(shell date +'%Y%m%d')
+RELEASE_ALPHA_NAME=terraform-provider-alicloud_v$(RELEASE_ALPHA_VERSION)
 
 default: build
 
@@ -15,7 +17,7 @@ testacc: fmtcheck
 
 vet:
 	@echo "go vet ."
-	@go vet $$(go list ./... | grep -v vendor/) ; if [ $$? -eq 1 ]; then \
+	@go vet $$(go list ./... | grep -v scripts | grep -v vendor/) ; if [ $$? -eq 1 ]; then \
 		echo ""; \
 		echo "Vet found suspicious constructs. Please check the reported constructs"; \
 		echo "and fix them if necessary before submitting the code for review."; \
@@ -27,7 +29,10 @@ fmt:
 	goimports -w $(GOFMT_FILES)
 
 fmtcheck:
-	@sh -c "'$(CURDIR)/scripts/gofmtcheck.sh'"
+	"$(CURDIR)/scripts/gofmtcheck.sh"
+
+importscheck:
+	"$(CURDIR)/scripts/goimportscheck.sh"
 
 errcheck:
 	@sh -c "'$(CURDIR)/scripts/errcheck.sh'"
@@ -60,7 +65,7 @@ endif
 
 all: mac windows linux
 
-dev: clean fmt mac copy
+dev: clean mac copy
 
 devlinux: clean fmt linux linuxcopy
 
@@ -92,3 +97,14 @@ linux:
 	GOOS=linux GOARCH=amd64 go build -o bin/terraform-provider-alicloud
 	tar czvf bin/terraform-provider-alicloud_linux-amd64.tgz bin/terraform-provider-alicloud
 	rm -rf bin/terraform-provider-alicloud
+
+alpha:
+	GOOS=linux GOARCH=amd64 go build -o bin/$(RELEASE_ALPHA_NAME)
+	aliyun oss cp bin/$(RELEASE_ALPHA_NAME) oss://iac-service-terraform/terraform/alphaplugins/registry.terraform.io/aliyun/alicloud/$(RELEASE_ALPHA_VERSION)/linux_amd64/$(RELEASE_ALPHA_NAME)  --profile terraformer --region cn-hangzhou
+	#aliyun oss cp bin/$(RELEASE_ALPHA_NAME) oss://iac-service-terraform/terraform/alphaplugins/registry.terraform.io/hashicorp/alicloud/$(RELEASE_ALPHA_VERSION)/linux_amd64/$(RELEASE_ALPHA_NAME)  --profile terraformer --region cn-hangzhou
+	rm -rf bin/$(RELEASE_ALPHA_NAME)
+
+macarm:
+	GOOS=darwin GOARCH=arm64 go build -o bin/terraform-provider-alicloud_v1.0.0
+	cp bin/terraform-provider-alicloud_v1.0.0 ~/.terraform.d/plugins/registry.terraform.io/aliyun/alicloud/1.0.0/darwin_arm64/
+	mv bin/terraform-provider-alicloud_v1.0.0 ~/.terraform.d/plugins/registry.terraform.io/hashicorp/alicloud/1.0.0/darwin_arm64/

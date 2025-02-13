@@ -7,78 +7,85 @@ description: |-
   Provides an RDS instance read write splitting connection resource.
 ---
 
-# alicloud\_rds\_db\_proxy
+# alicloud_rds_db_proxy
 
-Information about RDS database exclusive agent and its usage, see [Dedicated proxy (read/write splitting).](https://www.alibabacloud.com/help/en/apsaradb-for-rds/latest/dedicated-proxy).
--> **NOTE:** Available in 1.193.0+.
+Information about RDS database exclusive agent and its usage, see [What is RDS DB Proxy](https://www.alibabacloud.com/help/en/apsaradb-for-rds/latest/api-rds-2014-08-15-modifydbproxy).
+
+-> **NOTE:** Available since v1.193.0.
 
 ## Example Usage
 
-```
-variable "creation" {
-  default = "Rds"
-}
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_rds_db_proxy&exampleId=17286700-d627-0c0f-5c6c-18d91eb8572e7b07c365&activeTab=example&spm=docs.r.rds_db_proxy.0.17286700d6&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
 
+```terraform
 variable "name" {
-  default = "dbInstancevpc"
+  default = "tf-example"
 }
-
-data "alicloud_zones" "default" {
-  available_resource_creation = var.creation
+data "alicloud_db_zones" "default" {
+  engine         = "MySQL"
+  engine_version = "5.6"
 }
 
 resource "alicloud_vpc" "default" {
-  vpc_name       = var.name
+  vpc_name   = var.name
   cidr_block = "172.16.0.0/16"
 }
-
 resource "alicloud_vswitch" "default" {
-  vpc_id            = alicloud_vpc.default.id
-  cidr_block        = "172.16.0.0/24"
-  zone_id           = data.alicloud_zones.default.zones[0].id
-  vswitch_name      = var.name
+  vpc_id       = alicloud_vpc.default.id
+  cidr_block   = "172.16.0.0/24"
+  zone_id      = data.alicloud_db_zones.default.zones.0.id
+  vswitch_name = var.name
+}
+
+resource "alicloud_security_group" "default" {
+  name   = var.name
+  vpc_id = alicloud_vpc.default.id
 }
 
 resource "alicloud_db_instance" "default" {
-  engine               = "MySQL"
-  engine_version       = "5.7"
-  instance_type        = "rds.mysql.c1.large"
-  instance_storage     = "20"
-  instance_charge_type = "Postpaid"
-  instance_name        = var.name
-  vswitch_id           = alicloud_vswitch.default.id
-  db_instance_storage_type  = "local_ssd"
+  engine                   = "MySQL"
+  engine_version           = "5.7"
+  instance_type            = "rds.mysql.c1.large"
+  instance_storage         = "20"
+  instance_charge_type     = "Postpaid"
+  instance_name            = var.name
+  vswitch_id               = alicloud_vswitch.default.id
+  db_instance_storage_type = "local_ssd"
 }
 
 resource "alicloud_db_readonly_instance" "default" {
-  master_db_instance_id = alicloud_db_instance.default.id
   zone_id               = alicloud_db_instance.default.zone_id
+  master_db_instance_id = alicloud_db_instance.default.id
   engine_version        = alicloud_db_instance.default.engine_version
-  instance_type         = "rds.mysql.s3.large"
-  instance_storage      = "20"
-  instance_name         = "${var.name}ro"
+  instance_storage      = alicloud_db_instance.default.instance_storage
+  instance_type         = alicloud_db_instance.default.instance_type
+  instance_name         = "${var.name}readonly"
   vswitch_id            = alicloud_vswitch.default.id
 }
 
 resource "alicloud_rds_db_proxy" "default" {
-  instance_id = alicloud_db_instance.default.id
-  instance_network_type = "VPC"
-  vpc_id = alicloud_db_instance.default.vpc_id
-  vswitch_id = alicloud_db_instance.default.vswitch_id
-  db_proxy_instance_num = 2
-  db_proxy_connection_prefix = "ttest001"
-  db_proxy_connect_string_port = 3306
-  db_proxy_endpoint_read_write_mode = "ReadWrite"
-  read_only_instance_max_delay_time = 90
-  db_proxy_features = "TransactionReadSqlRouteOptimizeStatus:1;ConnectionPersist:1;ReadWriteSpliting:1"
+  instance_id                          = alicloud_db_instance.default.id
+  instance_network_type                = "VPC"
+  vpc_id                               = alicloud_db_instance.default.vpc_id
+  vswitch_id                           = alicloud_db_instance.default.vswitch_id
+  db_proxy_instance_num                = 2
+  db_proxy_connection_prefix           = "example"
+  db_proxy_connect_string_port         = 3306
+  db_proxy_endpoint_read_write_mode    = "ReadWrite"
+  read_only_instance_max_delay_time    = 90
+  db_proxy_features                    = "TransactionReadSqlRouteOptimizeStatus:1;ConnectionPersist:1;ReadWriteSpliting:1"
   read_only_instance_distribution_type = "Custom"
   read_only_instance_weight {
-    instance_id  = alicloud_db_instance.default.id
-    weight = "100"
+    instance_id = alicloud_db_instance.default.id
+    weight      = "100"
   }
   read_only_instance_weight {
-    instance_id  = alicloud_db_readonly_instance.default.id
-    weight = "500"
+    instance_id = alicloud_db_readonly_instance.default.id
+    weight      = "500"
   }
 }
 ```
@@ -96,6 +103,9 @@ The following arguments are supported:
 * `vswitch_id` - (Required, ForceNew)The ID of the vSwitch that is associated with the specified VPC.
 * `db_proxy_connection_prefix` - (Optional)The new prefix of the proxy endpoint. Enter a prefix.
 * `db_proxy_connect_string_port` - (Optional)The port number that is associated with the proxy endpoint.
+* `db_proxy_instance_type` - (Optional, Available since v1.230.0) The database proxy type. Valid values:
+  - common: universal proxy.
+  - exclusive: Exclusive proxy (default).
 * `effective_time` - (Optional)When modifying the number of proxy instances,The time when you want to apply the new database proxy settings.Valid values:
   - Immediate: ApsaraDB RDS immediately applies the new settings.
   - MaintainTime: ApsaraDB RDS applies the new settings during the maintenance window that you specified. For more information, see Modify the maintenance window.
@@ -124,7 +134,7 @@ The following arguments are supported:
 
 -> **NOTE:** Note If you set the ReadOnlyInstanceDistributionType parameter to Custom, you must specify the ReadOnlyInstanceWeight parameter.
 
-* `read_only_instance_weight` - (Optional) A list of the read weights of the instance and its read-only instances.  It contains two sub-fields(instance_id and weight). Read weights increase in increments of 100, and the maximum read weight is 10000.
+* `read_only_instance_weight` - (Optional) A list of the read weights of the instance and its read-only instances.  It contains two sub-fields(instance_id and weight). Read weights increase in increments of 100, and the maximum read weight is 10000. See [`read_only_instance_weight`](#read_only_instance_weight) below.
 * `db_proxy_endpoint_read_write_mode` - (Optional) The read and write attributes of the proxy terminal. Valid values:
   - ReadWrite: The proxy terminal connects to the primary instance and can receive both read and write requests.
   - ReadOnly: The proxy terminal does not connect to the primary instance and can receive only read requests. This is the default value.
@@ -138,11 +148,11 @@ The following arguments are supported:
 * `upgrade_time` - (Optional) The time when you want to upgrade the database proxy version of the instance. Valid values:
   - MaintainTime: ApsaraDB RDS performs the upgrade during the maintenance window that you specified. This is the default value. For more information, see Modify the maintenance window.
   - Immediate: ApsaraDB RDS immediately performs the upgrade.
-  - SpecificTime: ApsaraDB RDS performs the upgrade at a specified point in time.  
+  - SpecificTime: ApsaraDB RDS performs the upgrade at a specified point in time.
 * `switch_time` - (Optional) The point in time at which you want to upgrade the database proxy version of the instance. Specify the time in the ISO 8601 standard in the yyyy-MM-ddTHH:mm:ssZ format. The time must be in UTC.
 * `resource_group_id` - (Optional) The ID of the resource group.
 
-## Block read_only_instance_weight
+### `read_only_instance_weight`
 
 The read_only_instance_weight mapping supports the following:
 
@@ -160,7 +170,7 @@ The following attributes are exported:
 * `db_proxy_connection_string` - Connection instance string.
 * `ssl_expired_time` - The time when the certificate expires.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

@@ -7,22 +7,38 @@ description: |-
   Provides an Alicloud Service Mesh User Permission resource.
 ---
 
-# alicloud\_service\_mesh\_user\_permission
+# alicloud_service_mesh_user_permission
 
 Provides a Service Mesh UserPermission resource.
 
-For information about Service Mesh User Permission and how to use it, see [What is User Permission](https://help.aliyun.com/document_detail/171622.html).
+For information about Service Mesh User Permission and how to use it, see [What is User Permission](https://www.alibabacloud.com/help/en/alibaba-cloud-service-mesh/latest/api-servicemesh-2020-01-11-grantuserpermissions).
 
--> **NOTE:** Available in v1.174.0+.
+-> **NOTE:** Available since v1.174.0.
 
 ## Example Usage
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_service_mesh_user_permission&exampleId=c1b96c8e-6c5b-6dbb-ba10-d274c2629366530e8a52&activeTab=example&spm=docs.r.service_mesh_user_permission.0.c1b96c8e6c&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
-variable "name" {
-  default = "servicemesh"
+provider "alicloud" {
+  region = "cn-hangzhou"
 }
+
+variable "name" {
+  default = "tfexample"
+}
+
+resource "random_integer" "default" {
+  min = 10000
+  max = 99999
+}
+
 data "alicloud_service_mesh_versions" "default" {
   edition = "Default"
 }
@@ -30,7 +46,7 @@ data "alicloud_zones" "default" {
   available_resource_creation = "VSwitch"
 }
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+  name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vswitches" "default" {
@@ -43,10 +59,10 @@ resource "alicloud_ram_user" "default" {
 }
 
 resource "alicloud_service_mesh_service_mesh" "default1" {
-  service_mesh_name = var.name
+  service_mesh_name = "${var.name}-${random_integer.default.result}"
   edition           = "Default"
-  version           = data.alicloud_service_mesh_versions.default.versions.0.version
   cluster_spec      = "standard"
+  version           = data.alicloud_service_mesh_versions.default.versions.0.version
   network {
     vpc_id        = data.alicloud_vpcs.default.ids.0
     vswitche_list = [data.alicloud_vswitches.default.ids.0]
@@ -57,17 +73,15 @@ resource "alicloud_service_mesh_service_mesh" "default1" {
   }
 }
 
-resource "alicloud_service_mesh_user_permission" "example" {
+resource "alicloud_service_mesh_user_permission" "default" {
   sub_account_user_id = alicloud_ram_user.default.id
   permissions {
-    role_name       = "istio-admin"
+    role_name       = "istio-ops"
     service_mesh_id = alicloud_service_mesh_service_mesh.default1.id
     role_type       = "custom"
     is_custom       = true
-    is_ram_role     = false
   }
 }
-
 ```
 
 ## Argument Reference
@@ -75,10 +89,9 @@ resource "alicloud_service_mesh_user_permission" "example" {
 The following arguments are supported:
 
 * `sub_account_user_id` - (Required, ForceNew) The configuration of the Load Balancer. See the following `Block load_balancer`.
-* `permissions` - (Optional) List of permissions. **Warning:** The list requires the full amount of permission information to be passed. Adding permissions means adding items to the list, and deleting them or inputting nothing means removing items. See the following `Block permissions`.
+* `permissions` - (Optional) List of permissions. **Warning:** The list requires the full amount of permission information to be passed. Adding permissions means adding items to the list, and deleting them or inputting nothing means removing items. See [`permissions`](#permissions) below.
 
-
-#### Block permissions
+### `permissions`
 
 The permissions supports the following:
 
@@ -99,7 +112,7 @@ The following attributes are exported:
 * `id` - The resource ID in terraform of User Permission. The value is same as `sub_account_user_id`.
 
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

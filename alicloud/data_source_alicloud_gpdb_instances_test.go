@@ -5,13 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 )
 
 func TestAccAlicloudGpdbInstancesDataSource(t *testing.T) {
 	rand := acctest.RandInt()
-	checkoutSupportedRegions(t, true, connectivity.GPDBSupportRegions)
 	idsConf := dataSourceTestAccConfig{
 		existConfig: testAccCheckAlicloudGpdbInstancesDataSourceName(rand, map[string]string{
 			"ids": `["${alicloud_gpdb_instance.default.id}"]`,
@@ -192,7 +190,7 @@ variable "name" {
 data "alicloud_resource_manager_resource_groups" "default" {}
 data "alicloud_gpdb_zones" "default" {}
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+  name_regex = "^default-NODELETING$"
 }
 data "alicloud_vswitches" "default" {
   vpc_id  = data.alicloud_vpcs.default.ids.0

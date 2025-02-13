@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
 
-func TestAccAlicloudDdosbgpIp_basic0(t *testing.T) {
+func TestAccAliCloudDdosbgpIp_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_ddosbgp_ip.default"
 	checkoutSupportedRegions(t, true, connectivity.DdosBgpSupportRegions)
@@ -35,6 +35,7 @@ func TestAccAlicloudDdosbgpIp_basic0(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, connectivity.DdosBgpRegions)
 		},
 		IDRefreshName: resourceId,
 		Providers:     testAccProviders,
@@ -43,13 +44,15 @@ func TestAccAlicloudDdosbgpIp_basic0(t *testing.T) {
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"ip":                "${alicloud_eip_address.default.ip_address}",
-					"instance_id":       "${data.alicloud_ddosbgp_instances.default.ids.0}",
+					"instance_id":       "${local.instance_id}",
 					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"member_uid":        "${data.alicloud_account.current.id}",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"ip":          CHECKSET,
 						"instance_id": CHECKSET,
+						"member_uid":  CHECKSET,
 					}),
 				),
 			},
@@ -57,7 +60,7 @@ func TestAccAlicloudDdosbgpIp_basic0(t *testing.T) {
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"resource_group_id"},
+				ImportStateVerifyIgnore: []string{},
 			},
 		},
 	})
@@ -76,12 +79,28 @@ variable "name" {
 }
 
 data "alicloud_resource_manager_resource_groups" "default" {}
+data "alicloud_account" "current" {}
 
 resource "alicloud_eip_address" "default" {
 	address_name = var.name
 }
 
 data "alicloud_ddosbgp_instances" default {}
+
+locals {
+  instance_id = length(data.alicloud_ddosbgp_instances.default.ids) > 0 ? data.alicloud_ddosbgp_instances.default.ids.0 : concat(alicloud_ddosbgp_instance.default.*.id, [""])[0]
+}
+
+resource "alicloud_ddosbgp_instance" "default" {
+  count = length(data.alicloud_ddosbgp_instances.default.ids) > 0 ? 0 : 1
+  name             = var.name
+  base_bandwidth   = 20
+  bandwidth        = -1
+  ip_count         = 100
+  ip_type          = "IPv4"
+  normal_bandwidth = 100
+  type             = "Enterprise"
+}
 
 `, name)
 }

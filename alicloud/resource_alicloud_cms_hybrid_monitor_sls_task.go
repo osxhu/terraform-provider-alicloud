@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -182,10 +181,7 @@ func resourceAlicloudCmsHybridMonitorSlsTaskCreate(d *schema.ResourceData, meta 
 	var response map[string]interface{}
 	action := "CreateHybridMonitorTask"
 	request := make(map[string]interface{})
-	conn, err := client.NewCmsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("attach_labels"); ok {
 		for attachLabelsPtr, attachLabels := range v.(*schema.Set).List() {
 			attachLabelsArg := attachLabels.(map[string]interface{})
@@ -269,7 +265,7 @@ func resourceAlicloudCmsHybridMonitorSlsTaskCreate(d *schema.ResourceData, meta 
 	request["TaskType"] = "aliyun_sls"
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Cms", "2019-01-01", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"InternalError"}) || NeedRetry(err) {
 				wait()
@@ -282,9 +278,6 @@ func resourceAlicloudCmsHybridMonitorSlsTaskCreate(d *schema.ResourceData, meta 
 	addDebug(action, response, request)
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_cms_hybrid_monitor_sls_task", action, AlibabaCloudSdkGoERROR)
-	}
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
 	}
 
 	d.SetId(fmt.Sprint(response["TaskId"]))
@@ -325,28 +318,28 @@ func resourceAlicloudCmsHybridMonitorSlsTaskRead(d *schema.ResourceData, meta in
 
 	slsProcessConfigSli := make([]map[string]interface{}, 0)
 	if len(object["SLSProcessConfig"].(map[string]interface{})) > 0 {
-		slsProcessConfig := object["SLSProcessConfig"]
+		slsProcessConfig := object["SLSProcessConfig"].(map[string]interface{})
 		slsProcessConfigMap := make(map[string]interface{})
 
-		expressSli := make([]map[string]interface{}, 0)
-		if len(slsProcessConfig.(map[string]interface{})["Express"].([]interface{})) > 0 {
-			for _, express := range slsProcessConfig.(map[string]interface{})["Express"].([]interface{}) {
+		if len(slsProcessConfig["Express"].([]interface{})) > 0 {
+			expressSli := make([]map[string]interface{}, 0)
+			for _, express := range slsProcessConfig["Express"].([]interface{}) {
 				expressMap := make(map[string]interface{})
 				expressMap["alias"] = express.(map[string]interface{})["Alias"]
 				expressMap["express"] = express.(map[string]interface{})["Express"]
 				expressSli = append(expressSli, expressMap)
 			}
+			slsProcessConfigMap["express"] = expressSli
 		}
-		slsProcessConfigMap["express"] = expressSli
 
-		filterSli := make([]map[string]interface{}, 0)
-		if len(slsProcessConfig.(map[string]interface{})["Filter"].(map[string]interface{})) > 0 {
-			filter := slsProcessConfig.(map[string]interface{})["Filter"]
+		if len(slsProcessConfig["Filter"].(map[string]interface{})) > 0 {
+			filterSli := make([]map[string]interface{}, 0)
+			filter := slsProcessConfig["Filter"].(map[string]interface{})
 			filterMap := make(map[string]interface{})
 
 			filtersSli := make([]map[string]interface{}, 0)
-			if len(filter.(map[string]interface{})["Filters"].([]interface{})) > 0 {
-				for _, filters := range filter.(map[string]interface{})["Filters"].([]interface{}) {
+			if len(filter["Filters"].([]interface{})) > 0 {
+				for _, filters := range filter["Filters"].([]interface{}) {
 					filtersMap := make(map[string]interface{})
 					filtersMap["operator"] = filters.(map[string]interface{})["Operator"]
 					filtersMap["sls_key_name"] = filters.(map[string]interface{})["SLSKeyName"]
@@ -355,25 +348,25 @@ func resourceAlicloudCmsHybridMonitorSlsTaskRead(d *schema.ResourceData, meta in
 				}
 			}
 			filterMap["filters"] = filtersSli
-			filterMap["relation"] = filter.(map[string]interface{})["Relation"]
+			filterMap["relation"] = filter["Relation"]
 			filterSli = append(filterSli, filterMap)
+			slsProcessConfigMap["filter"] = filterSli
 		}
-		slsProcessConfigMap["filter"] = filterSli
 
-		groupBySli := make([]map[string]interface{}, 0)
-		if len(slsProcessConfig.(map[string]interface{})["GroupBy"].([]interface{})) > 0 {
-			for _, groupBy := range slsProcessConfig.(map[string]interface{})["GroupBy"].([]interface{}) {
+		if len(slsProcessConfig["GroupBy"].([]interface{})) > 0 {
+			groupBySli := make([]map[string]interface{}, 0)
+			for _, groupBy := range slsProcessConfig["GroupBy"].([]interface{}) {
 				groupByMap := make(map[string]interface{})
 				groupByMap["alias"] = groupBy.(map[string]interface{})["Alias"]
 				groupByMap["sls_key_name"] = groupBy.(map[string]interface{})["SLSKeyName"]
 				groupBySli = append(groupBySli, groupByMap)
 			}
+			slsProcessConfigMap["group_by"] = groupBySli
 		}
-		slsProcessConfigMap["group_by"] = groupBySli
 
-		statisticsSli := make([]map[string]interface{}, 0)
-		if len(slsProcessConfig.(map[string]interface{})["Statistics"].([]interface{})) > 0 {
-			for _, statistics := range slsProcessConfig.(map[string]interface{})["Statistics"].([]interface{}) {
+		if len(slsProcessConfig["Statistics"].([]interface{})) > 0 {
+			statisticsSli := make([]map[string]interface{}, 0)
+			for _, statistics := range slsProcessConfig["Statistics"].([]interface{}) {
 				statisticsMap := make(map[string]interface{})
 				statisticsMap["alias"] = statistics.(map[string]interface{})["Alias"]
 				statisticsMap["function"] = statistics.(map[string]interface{})["Function"]
@@ -382,8 +375,9 @@ func resourceAlicloudCmsHybridMonitorSlsTaskRead(d *schema.ResourceData, meta in
 				statisticsMap["sls_key_name"] = statistics.(map[string]interface{})["SLSKeyName"]
 				statisticsSli = append(statisticsSli, statisticsMap)
 			}
+			slsProcessConfigMap["statistics"] = statisticsSli
 		}
-		slsProcessConfigMap["statistics"] = statisticsSli
+
 		slsProcessConfigSli = append(slsProcessConfigSli, slsProcessConfigMap)
 	}
 	d.Set("sls_process_config", slsProcessConfigSli)
@@ -392,10 +386,7 @@ func resourceAlicloudCmsHybridMonitorSlsTaskRead(d *schema.ResourceData, meta in
 }
 func resourceAlicloudCmsHybridMonitorSlsTaskUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	conn, err := client.NewCmsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	update := false
 	request := map[string]interface{}{
@@ -497,7 +488,7 @@ func resourceAlicloudCmsHybridMonitorSlsTaskUpdate(d *schema.ResourceData, meta 
 		action := "ModifyHybridMonitorTask"
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Cms", "2019-01-01", action, nil, request, false)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"InternalError"}) || NeedRetry(err) {
 					wait()
@@ -511,9 +502,6 @@ func resourceAlicloudCmsHybridMonitorSlsTaskUpdate(d *schema.ResourceData, meta 
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
-		if fmt.Sprint(response["Success"]) == "false" {
-			return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
-		}
 	}
 	return resourceAlicloudCmsHybridMonitorSlsTaskRead(d, meta)
 }
@@ -521,16 +509,13 @@ func resourceAlicloudCmsHybridMonitorSlsTaskDelete(d *schema.ResourceData, meta 
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteHybridMonitorTask"
 	var response map[string]interface{}
-	conn, err := client.NewCmsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"TaskId": d.Id(),
 	}
 	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Cms", "2019-01-01", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"InternalError"}) || NeedRetry(err) {
 				wait()
@@ -542,13 +527,10 @@ func resourceAlicloudCmsHybridMonitorSlsTaskDelete(d *schema.ResourceData, meta 
 	})
 	addDebug(action, response, request)
 	if err != nil {
+		if IsExpectedErrors(err, []string{"ResourceNotFound"}) {
+			return nil
+		}
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
-	}
-	if IsExpectedErrorCodes(fmt.Sprint(response["Code"]), []string{"ResourceNotFound"}) {
-		return nil
-	}
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
 	}
 	return nil
 }

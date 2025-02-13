@@ -5,11 +5,9 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAlicloudDtsMigrationJob() *schema.Resource {
@@ -56,14 +54,14 @@ func resourceAlicloudDtsMigrationJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"RDS", "PolarDB", "POLARDBX20", "ADS", "MONGODB", "GREENPLUM", "DATAHUB", "OTHER", "ECS", "EXPRESS", "CEN", "DG"}, false),
+				ValidateFunc: StringInSlice([]string{"RDS", "PolarDB", "POLARDBX20", "ADS", "MONGODB", "GREENPLUM", "DATAHUB", "OTHER", "ECS", "EXPRESS", "CEN", "DG"}, false),
 			},
 
 			"destination_endpoint_engine_name": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"ADS", "ADB30", "AS400", "DATAHUB", "DB2", "GREENPLUM", "KAFKA", "MONGODB", "MSSQL", "MySQL", "ORACLE", "PolarDB", "POLARDBX20", "POLARDB_O", "PostgreSQL"}, false),
+				ValidateFunc: StringInSlice([]string{"ADS", "ADB30", "AS400", "DATAHUB", "DB2", "GREENPLUM", "KAFKA", "MONGODB", "MSSQL", "MySQL", "ORACLE", "PolarDB", "POLARDBX20", "POLARDB_O", "PostgreSQL"}, false),
 			},
 			"destination_endpoint_instance_id": {
 				Type:     schema.TypeString,
@@ -108,7 +106,7 @@ func resourceAlicloudDtsMigrationJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"CEN", "DG", "DISTRIBUTED_DMSLOGICDB", "ECS", "EXPRESS", "MONGODB", "OTHER", "PolarDB", "POLARDBX20", "RDS"}, false),
+				ValidateFunc: StringInSlice([]string{"CEN", "DG", "DISTRIBUTED_DMSLOGICDB", "ECS", "EXPRESS", "MONGODB", "OTHER", "PolarDB", "POLARDBX20", "RDS"}, false),
 			},
 			"source_endpoint_instance_id": {
 				Type:     schema.TypeString,
@@ -119,7 +117,7 @@ func resourceAlicloudDtsMigrationJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"AS400", "DB2", "DMSPOLARDB", "HBASE", "MONGODB", "MSSQL", "MySQL", "ORACLE", "PolarDB", "POLARDBX20", "POLARDB_O", "POSTGRESQL", "TERADATA"}, false),
+				ValidateFunc: StringInSlice([]string{"AS400", "DB2", "DMSPOLARDB", "HBASE", "MONGODB", "MSSQL", "MySQL", "ORACLE", "PolarDB", "POLARDBX20", "POLARDB_O", "POSTGRESQL", "TERADATA"}, false),
 			},
 			"source_endpoint_region": {
 				Type:     schema.TypeString,
@@ -180,13 +178,13 @@ func resourceAlicloudDtsMigrationJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"xxlarge", "xlarge", "large", "medium", "small"}, false),
+				ValidateFunc: StringInSlice([]string{"xxlarge", "xlarge", "large", "medium", "small"}, false),
 			},
 			"status": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Suspending", "Migrating"}, false),
+				ValidateFunc: StringInSlice([]string{"Suspending", "Migrating"}, false),
 			},
 		},
 	}
@@ -197,10 +195,7 @@ func resourceAlicloudDtsMigrationJobCreate(d *schema.ResourceData, meta interfac
 	var response map[string]interface{}
 	action := "ConfigureDtsJob"
 	request := make(map[string]interface{})
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	if v, ok := d.GetOk("dts_job_name"); ok {
 		request["DtsJobName"] = v
@@ -280,7 +275,7 @@ func resourceAlicloudDtsMigrationJobCreate(d *schema.ResourceData, meta interfac
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -373,13 +368,9 @@ func resourceAlicloudDtsMigrationJobUpdate(d *schema.ResourceData, meta interfac
 				}
 				request["RegionId"] = client.RegionId
 				action := "StartDtsJob"
-				conn, err := client.NewDtsClient()
-				if err != nil {
-					return WrapError(err)
-				}
 				wait := incrementalWait(3*time.Second, 3*time.Second)
 				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 					if err != nil {
 						if NeedRetry(err) {
 							wait()
@@ -401,13 +392,9 @@ func resourceAlicloudDtsMigrationJobUpdate(d *schema.ResourceData, meta interfac
 				}
 				request["RegionId"] = client.RegionId
 				action := "SuspendDtsJob"
-				conn, err := client.NewDtsClient()
-				if err != nil {
-					return WrapError(err)
-				}
 				wait := incrementalWait(3*time.Second, 3*time.Second)
 				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+					response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 					if err != nil {
 						if NeedRetry(err) {
 							wait()
@@ -431,10 +418,7 @@ func resourceAlicloudDtsMigrationJobDelete(d *schema.ResourceData, meta interfac
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteDtsJob"
 	var response map[string]interface{}
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"DtsJobId": d.Id(),
 	}
@@ -442,7 +426,7 @@ func resourceAlicloudDtsMigrationJobDelete(d *schema.ResourceData, meta interfac
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

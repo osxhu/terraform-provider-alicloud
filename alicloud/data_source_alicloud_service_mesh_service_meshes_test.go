@@ -66,8 +66,9 @@ func TestAccAlicloudServiceMeshServiceMeshesDataSource(t *testing.T) {
 			"ids.#":                           "1",
 			"meshes.#":                        "1",
 			"meshes.0.status":                 "running",
-			"meshes.0.istio_operator_version": "",
+			"meshes.0.istio_operator_version": CHECKSET,
 			"meshes.0.sidecar_version":        CHECKSET,
+			"meshes.0.kube_config":            CHECKSET,
 			"meshes.0.service_mesh_name":      fmt.Sprintf("tf-testaccservicemeshservicemesh-%d", rand),
 		}
 	}
@@ -100,7 +101,7 @@ data "alicloud_zones" "default" {
 	available_resource_creation= "VSwitch"
 }
 data "alicloud_vpcs" "default" {
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vswitches" "default" {

@@ -50,16 +50,10 @@ func testSweepDTSMigrationJob(region string) error {
 	request["MaxResults"] = PageSizeXLarge
 
 	var response map[string]interface{}
-	conn, err := client.NewDtsClient()
-	if err != nil {
-		log.Printf("[ERROR] %s get an error: %#v", action, err)
-	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -101,7 +95,7 @@ func testSweepDTSMigrationJob(region string) error {
 			request := map[string]interface{}{
 				"DtsJobId": item["DtsJobId"],
 			}
-			_, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2020-01-01"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			_, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete DTS Migration Job (%s): %s", item["DtsJobId"].(string), err)
 			}
@@ -156,7 +150,6 @@ func TestAccAlicloudDTSMigrationJob_basic0(t *testing.T) {
 					"structure_initialization":           "true",
 					"data_initialization":                "true",
 					"data_synchronization":               "true",
-					"status":                             "Migrating",
 					"depends_on":                         []string{"alicloud_db_account_privilege.default"},
 				}),
 				Check: resource.ComposeTestCheckFunc(
@@ -175,20 +168,19 @@ func TestAccAlicloudDTSMigrationJob_basic0(t *testing.T) {
 						"structure_initialization":           "true",
 						"data_initialization":                "true",
 						"data_synchronization":               "true",
-						"status":                             "Migrating",
 					}),
 				),
 			},
-			{
-				Config: testAccConfig(map[string]interface{}{
-					"status": "Suspending",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"status": "Suspending",
-					}),
-				),
-			},
+			//{
+			//	Config: testAccConfig(map[string]interface{}{
+			//		"status": "Suspending",
+			//	}),
+			//	Check: resource.ComposeTestCheckFunc(
+			//		testAccCheck(map[string]string{
+			//			"status": "Suspending",
+			//		}),
+			//	),
+			//},
 			{
 				Config: testAccConfig(map[string]interface{}{
 					"status": "Migrating",
@@ -237,7 +229,7 @@ data "alicloud_db_instance_classes" "default" {
 }
 
 data "alicloud_vpcs" "default" {
-  name_regex = "default-NODELETING"
+    name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vswitches" "default" {

@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
 	"time"
 
@@ -20,18 +20,13 @@ type PvtzService struct {
 
 func (s *PvtzService) DescribePvtzZoneBasic(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeZoneInfo"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"ZoneId":   id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"Zone.Invalid.Id", "Zone.Invalid.UserId", "Zone.NotExists", "ZoneVpc.NotExists.VpcId"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("PvtzZone", id)), NotFoundMsg, ProviderERROR)
@@ -51,18 +46,13 @@ func (s *PvtzService) DescribePvtzZoneBasic(id string) (object map[string]interf
 
 func (s *PvtzService) DescribePvtzZoneAttachment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeZoneInfo"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"ZoneId":   id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"Zone.Invalid.Id", "Zone.Invalid.UserId", "Zone.NotExists", "ZoneVpc.NotExists.VpcId"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("PvtzZoneAttachment", id)), NotFoundMsg, ProviderERROR)
@@ -115,10 +105,7 @@ func (s *PvtzService) WaitForZoneAttachment(id string, vpcIdMap map[string]strin
 
 func (s *PvtzService) DescribePvtzZoneRecord(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeZoneRecords"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -132,11 +119,9 @@ func (s *PvtzService) DescribePvtzZoneRecord(id string) (object map[string]inter
 		"PageSize":   20,
 	}
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"System.Busy", "ServiceUnavailable", "Throttling.User"}) {
 					wait()
@@ -163,7 +148,7 @@ func (s *PvtzService) DescribePvtzZoneRecord(id string) (object map[string]inter
 			return object, WrapErrorf(Error(GetNotFoundMessage("PrivateZone", id)), NotFoundWithResponse, response)
 		}
 		for _, v := range v.([]interface{}) {
-			if fmt.Sprint(formatInt(v.(map[string]interface{})["RecordId"])) == parts[0] || fmt.Sprint(v.(map[string]interface{})["RecordId"]) == parts[0] {
+			if fmt.Sprint(v.(map[string]interface{})["RecordId"]) == parts[0] {
 				return v.(map[string]interface{}), nil
 			}
 		}
@@ -253,10 +238,7 @@ func (s *PvtzService) WaitForPvtzZoneRecord(id string, status Status, timeout in
 
 func (s *PvtzService) DescribePvtzUserVpcAuthorization(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeUserVpcAuthorizations"
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
@@ -267,11 +249,9 @@ func (s *PvtzService) DescribePvtzUserVpcAuthorization(id string) (object map[st
 		"AuthType":         parts[1],
 		"AuthorizedUserId": parts[0],
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -305,20 +285,15 @@ func (s *PvtzService) DescribePvtzUserVpcAuthorization(id string) (object map[st
 
 func (s *PvtzService) DescribePvtzEndpoint(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeResolverEndpoint"
 	request := map[string]interface{}{
 		"EndpointId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
 
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -365,19 +340,14 @@ func (s *PvtzService) PvtzEndpointStateRefreshFunc(id string, failStates []strin
 
 func (s *PvtzService) DescribePvtzRule(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeResolverRule"
 	request := map[string]interface{}{
 		"RuleId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -405,19 +375,14 @@ func (s *PvtzService) DescribePvtzRule(id string) (object map[string]interface{}
 
 func (s *PvtzService) DescribePvtzRuleAttachment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeResolverRule"
 	request := map[string]interface{}{
 		"RuleId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -444,17 +409,12 @@ func (s *PvtzService) DescribePvtzRuleAttachment(id string) (object map[string]i
 
 func (s *PvtzService) DescribeSyncEcsHostTask(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewPvtzClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeSyncEcsHostTask"
 	request := map[string]interface{}{
 		"ZoneId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2018-01-01"), StringPointer("AK"), nil, request, &runtime)
+	response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
 	if err != nil {
 		if IsExpectedErrors(err, []string{"System.Busy", "Ecs.SyncTask.NotExists", "ServiceUnavailable", "Throttling.User"}) {
 			err = WrapErrorf(Error(GetNotFoundMessage("PvtzZone", id)), NotFoundMsg, ProviderERROR)
@@ -487,4 +447,125 @@ func (s *PvtzService) DescribePvtzZone(id string) (object map[string]interface{}
 	}
 	object["SyncHostTask"] = syncObj
 	return object, nil
+}
+
+func (s *PvtzService) SetResourceTags(d *schema.ResourceData, resourceType string) error {
+	if d.HasChange("tags") {
+		var err error
+		var action string
+		client := s.client
+		var request map[string]interface{}
+		var response map[string]interface{}
+
+		added, removed := parsingTags(d)
+		removedTagKeys := make([]string, 0)
+		for _, v := range removed {
+			if !ignoredTags(v, "") {
+				removedTagKeys = append(removedTagKeys, v)
+			}
+		}
+		if len(removedTagKeys) > 0 {
+			action = "UnTagResources"
+			request = make(map[string]interface{})
+			request["ResourceId.1"] = d.Id()
+			request["RegionId"] = client.RegionId
+			for i, key := range removedTagKeys {
+				request[fmt.Sprintf("TagKey.%d", i+1)] = key
+			}
+
+			request["ResourceType"] = resourceType
+			wait := incrementalWait(3*time.Second, 5*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+				response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
+
+				if err != nil {
+					if NeedRetry(err) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				addDebug(action, response, request)
+				return nil
+			})
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+
+		}
+
+		if len(added) > 0 {
+			action = "TagResources"
+			request = make(map[string]interface{})
+			request["ResourceId.1"] = d.Id()
+			request["RegionId"] = client.RegionId
+			count := 1
+			for key, value := range added {
+				request[fmt.Sprintf("Tag.%d.Key", count)] = key
+				request[fmt.Sprintf("Tag.%d.Value", count)] = value
+				count++
+			}
+
+			request["ResourceType"] = resourceType
+			wait := incrementalWait(3*time.Second, 5*time.Second)
+			err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+				response, err = client.RpcPost("pvtz", "2018-01-01", action, nil, request, true)
+
+				if err != nil {
+					if NeedRetry(err) {
+						wait()
+						return resource.RetryableError(err)
+					}
+					return resource.NonRetryableError(err)
+				}
+				addDebug(action, response, request)
+				return nil
+			})
+			if err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
+
+		}
+		d.SetPartial("tags")
+	}
+
+	return nil
+}
+
+func (s *PvtzService) DescribeListTagResources(id string) (object map[string]interface{}, err error) {
+
+	client := s.client
+	var request map[string]interface{}
+	var response map[string]interface{}
+	var query map[string]interface{}
+	action := "ListTagResources"
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+
+	request["ResourceId.1"] = id
+	request["RegionId"] = client.RegionId
+
+	request["ResourceType"] = "ZONE"
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
+		response, err = client.RpcPost("pvtz", "2018-01-01", action, query, request, false)
+
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		addDebug(action, response, request)
+		return nil
+	})
+	if err != nil {
+		if IsExpectedErrors(err, []string{}) {
+			return object, WrapErrorf(Error(GetNotFoundMessage("ZONE", id)), NotFoundMsg, ProviderERROR, fmt.Sprint(response["RequestId"]))
+		}
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+
+	return response, nil
 }

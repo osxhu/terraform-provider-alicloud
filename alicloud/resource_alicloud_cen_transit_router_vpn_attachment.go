@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -25,8 +24,8 @@ func resourceAlicloudCenTransitRouterVpnAttachment() *schema.Resource {
 		},
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(40 * time.Minute),
-			Delete: schema.DefaultTimeout(30 * time.Minute),
 			Update: schema.DefaultTimeout(1 * time.Minute),
+			Delete: schema.DefaultTimeout(30 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
 			"auto_publish_route_enabled": {
@@ -38,10 +37,6 @@ func resourceAlicloudCenTransitRouterVpnAttachment() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-			},
-			"status": {
-				Type:     schema.TypeString,
-				Computed: true,
 			},
 			"transit_router_attachment_description": {
 				Type:         schema.TypeString,
@@ -72,6 +67,7 @@ func resourceAlicloudCenTransitRouterVpnAttachment() *schema.Resource {
 			"zone": {
 				Type:     schema.TypeSet,
 				Required: true,
+				ForceNew: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"zone_id": {
@@ -80,7 +76,11 @@ func resourceAlicloudCenTransitRouterVpnAttachment() *schema.Resource {
 						},
 					},
 				},
-				ForceNew: true,
+			},
+			"tags": tagsSchema(),
+			"status": {
+				Type:     schema.TypeString,
+				Computed: true,
 			},
 		},
 	}
@@ -91,10 +91,7 @@ func resourceAlicloudCenTransitRouterVpnAttachmentCreate(d *schema.ResourceData,
 	var response map[string]interface{}
 	action := "CreateTransitRouterVpnAttachment"
 	request := make(map[string]interface{})
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOkExists("auto_publish_route_enabled"); ok {
 		request["AutoPublishRouteEnabled"] = v
 	}
@@ -118,13 +115,11 @@ func resourceAlicloudCenTransitRouterVpnAttachmentCreate(d *schema.ResourceData,
 		request["Zone."+fmt.Sprint(zonePtr+1)+".ZoneId"] = zoneArg["zone_id"]
 	}
 	request["ClientToken"] = buildClientToken("CreateTransitRouterVpnAttachment")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
-			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"Operation.Blocking", "OperationFailed.AllocateCidrFailed", "IncorrectStatus.Status"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -144,8 +139,9 @@ func resourceAlicloudCenTransitRouterVpnAttachmentCreate(d *schema.ResourceData,
 		return WrapErrorf(err, IdMsg, d.Id())
 	}
 
-	return resourceAlicloudCenTransitRouterVpnAttachmentRead(d, meta)
+	return resourceAlicloudCenTransitRouterVpnAttachmentUpdate(d, meta)
 }
+
 func resourceAlicloudCenTransitRouterVpnAttachmentRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	cbnService := CbnService{client}
@@ -158,6 +154,7 @@ func resourceAlicloudCenTransitRouterVpnAttachmentRead(d *schema.ResourceData, m
 		}
 		return WrapError(err)
 	}
+
 	d.Set("auto_publish_route_enabled", object["AutoPublishRouteEnabled"])
 	d.Set("status", object["Status"])
 	d.Set("transit_router_id", object["TransitRouterId"])
@@ -165,6 +162,7 @@ func resourceAlicloudCenTransitRouterVpnAttachmentRead(d *schema.ResourceData, m
 	d.Set("transit_router_attachment_name", object["TransitRouterAttachmentName"])
 	d.Set("vpn_id", object["VpnId"])
 	d.Set("vpn_owner_id", fmt.Sprint(object["VpnOwnerId"]))
+
 	if zonesList, ok := object["Zones"]; ok && zonesList != nil {
 		zoneMaps := make([]map[string]interface{}, 0)
 		for _, zonesListItem := range zonesList.([]interface{}) {
@@ -178,33 +176,47 @@ func resourceAlicloudCenTransitRouterVpnAttachmentRead(d *schema.ResourceData, m
 		}
 	}
 
-	return nil
-}
-func resourceAlicloudCenTransitRouterVpnAttachmentUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*connectivity.AliyunClient)
-	cbnService := CbnService{client}
-	conn, err := client.NewCbnClient()
+	listTagResourcesObject, err := cbnService.ListTagResources(d.Id(), "TransitRouterVpnAttachment")
 	if err != nil {
 		return WrapError(err)
 	}
+
+	d.Set("tags", tagsToMap(listTagResourcesObject))
+
+	return nil
+}
+
+func resourceAlicloudCenTransitRouterVpnAttachmentUpdate(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*connectivity.AliyunClient)
+	cbnService := CbnService{client}
+	var err error
 	var response map[string]interface{}
 	update := false
+	d.Partial(true)
 	request := map[string]interface{}{
 		"TransitRouterAttachmentId": d.Id(),
 	}
-	if d.HasChange("auto_publish_route_enabled") || d.IsNewResource() {
+
+	if d.HasChange("tags") {
+		if err := cbnService.SetResourceTags(d, "TransitRouterVpnAttachment"); err != nil {
+			return WrapError(err)
+		}
+		d.SetPartial("tags")
+	}
+
+	if !d.IsNewResource() && d.HasChange("auto_publish_route_enabled") {
 		update = true
 		if v, ok := d.GetOkExists("auto_publish_route_enabled"); ok {
 			request["AutoPublishRouteEnabled"] = v
 		}
 	}
-	if d.HasChange("transit_router_attachment_description") {
+	if !d.IsNewResource() && d.HasChange("transit_router_attachment_description") {
 		update = true
 		if v, ok := d.GetOk("transit_router_attachment_description"); ok {
 			request["TransitRouterAttachmentDescription"] = v
 		}
 	}
-	if d.HasChange("transit_router_attachment_name") {
+	if !d.IsNewResource() && d.HasChange("transit_router_attachment_name") {
 		update = true
 		if v, ok := d.GetOk("transit_router_attachment_name"); ok {
 			request["TransitRouterAttachmentName"] = v
@@ -213,11 +225,9 @@ func resourceAlicloudCenTransitRouterVpnAttachmentUpdate(d *schema.ResourceData,
 	if update {
 		action := "UpdateTransitRouterVpnAttachmentAttribute"
 		request["ClientToken"] = buildClientToken("UpdateTransitRouterVpnAttachmentAttribute")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 			if err != nil {
 				if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
 					wait()
@@ -235,28 +245,31 @@ func resourceAlicloudCenTransitRouterVpnAttachmentUpdate(d *schema.ResourceData,
 		if _, err := stateConf.WaitForState(); err != nil {
 			return WrapErrorf(err, IdMsg, d.Id())
 		}
+
+		d.SetPartial("auto_publish_route_enabled")
+		d.SetPartial("transit_router_attachment_description")
+		d.SetPartial("transit_router_attachment_name")
 	}
+
+	d.Partial(false)
+
 	return resourceAlicloudCenTransitRouterVpnAttachmentRead(d, meta)
 }
+
 func resourceAlicloudCenTransitRouterVpnAttachmentDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	cbnService := CbnService{client}
 	action := "DeleteTransitRouterVpnAttachment"
 	var response map[string]interface{}
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"TransitRouterAttachmentId": d.Id(),
 	}
 
 	request["ClientToken"] = buildClientToken("DeleteTransitRouterVpnAttachment")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) || NeedRetry(err) {
 				wait()

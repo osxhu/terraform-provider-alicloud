@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
@@ -98,6 +97,10 @@ func dataSourceAlicloudAlikafkaInstances() *schema.Resource {
 							Computed: true,
 						},
 						"topic_quota": {
+							Type:     schema.TypeInt,
+							Computed: true,
+						},
+						"partition_num": {
 							Type:     schema.TypeInt,
 							Computed: true,
 						},
@@ -224,10 +227,7 @@ func dataSourceAlicloudAlikafkaInstancesRead(d *schema.ResourceData, meta interf
 
 	action := "GetInstanceList"
 	request := make(map[string]interface{})
-	conn, err := client.NewAlikafkaClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	request["RegionId"] = client.RegionId
 
@@ -250,11 +250,9 @@ func dataSourceAlicloudAlikafkaInstancesRead(d *schema.ResourceData, meta interf
 	var response map[string]interface{}
 	pageNo, pageSize := 1, PageSizeLarge
 	for {
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-16"), StringPointer("AK"), nil, request, &runtime)
+			response, err = client.RpcPost("alikafka", "2019-09-16", action, nil, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -314,7 +312,6 @@ func dataSourceAlicloudAlikafkaInstancesRead(d *schema.ResourceData, meta interf
 			"eip_max":              object["EipMax"],
 			"disk_type":            object["DiskType"],
 			"disk_size":            object["DiskSize"],
-			"topic_quota":          object["TopicNumLimit"],
 			"paid_type":            paidType,
 			"service_version":      object["UpgradeServiceDetailInfo"].(map[string]interface{})["Current2OpenSourceVersion"],
 			"spec_type":            object["SpecType"],
@@ -356,6 +353,13 @@ func dataSourceAlicloudAlikafkaInstancesRead(d *schema.ResourceData, meta interf
 
 		AlikaService := AlikafkaService{client}
 		if d.Get("enable_details").(bool) {
+			quota, err := AlikaService.GetQuotaTip(id)
+			if err != nil {
+				return WrapError(err)
+			}
+			mapping["topic_quota"] = quota["TopicQuota"]
+			mapping["partition_num"] = quota["PartitionNumOfBuy"]
+
 			getResp, err := AlikaService.GetAllowedIpList(id)
 			if err != nil {
 				return WrapError(err)

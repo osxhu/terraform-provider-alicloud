@@ -47,7 +47,7 @@ func testSweepCenBandwidthPackage(region string) error {
 	for {
 		var raw interface{}
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			raw, err = client.WithCenClient(func(cbnClient *cbn.Client) (interface{}, error) {
+			raw, err = client.WithCbnClient(func(cbnClient *cbn.Client) (interface{}, error) {
 				return cbnClient.DescribeCenBandwidthPackages(request)
 			})
 			if err != nil {
@@ -84,15 +84,17 @@ func testSweepCenBandwidthPackage(region string) error {
 		name := v.Name
 		id := v.CenBandwidthPackageId
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping CEN bandwidth package: %s (%s)", name, id)
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping CEN bandwidth package: %s (%s)", name, id)
+				continue
+			}
 		}
 		sweeped = true
 		if v.Status == string(InUse) {
@@ -100,7 +102,7 @@ func testSweepCenBandwidthPackage(region string) error {
 			request := cbn.CreateUnassociateCenBandwidthPackageRequest()
 			request.CenId = v.CenIds.CenId[0]
 			request.CenBandwidthPackageId = id
-			_, err := client.WithCenClient(func(cbnClient *cbn.Client) (interface{}, error) {
+			_, err := client.WithCbnClient(func(cbnClient *cbn.Client) (interface{}, error) {
 				return cbnClient.UnassociateCenBandwidthPackage(request)
 			})
 			if err != nil {
@@ -110,7 +112,7 @@ func testSweepCenBandwidthPackage(region string) error {
 		log.Printf("[INFO] Deleting CEN bandwidth package: %s (%s)", name, id)
 		request := cbn.CreateDeleteCenBandwidthPackageRequest()
 		request.CenBandwidthPackageId = id
-		_, err := client.WithCenClient(func(cbnClient *cbn.Client) (interface{}, error) {
+		_, err := client.WithCbnClient(func(cbnClient *cbn.Client) (interface{}, error) {
 			return cbnClient.DeleteCenBandwidthPackage(request)
 		})
 		if err != nil {

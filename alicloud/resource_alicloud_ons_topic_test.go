@@ -44,11 +44,7 @@ func testSweepOnsTopic(region string) error {
 	action := "OnsInstanceInServiceList"
 	request := make(map[string]interface{})
 	var response map[string]interface{}
-	conn, err := client.NewOnsClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 	if err != nil {
 		log.Printf("[ERROR] Failed to retrieve ons instance in service list: %s", err)
 	}
@@ -68,11 +64,7 @@ func testSweepOnsTopic(region string) error {
 		action := "OnsTopicList"
 		request := make(map[string]interface{})
 		var response map[string]interface{}
-		conn, err := client.NewOnsClient()
-		if err != nil {
-			return WrapError(err)
-		}
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 		if err != nil {
 			log.Printf("[ERROR] Failed to retrieve ons instance in service list: %s", err)
 		}
@@ -103,7 +95,7 @@ func testSweepOnsTopic(region string) error {
 				"InstanceId": instanceId,
 				"Topic":      item["Topic"],
 			}
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-02-14"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Ons", "2019-02-14", action, nil, request, false)
 			if err != nil {
 				log.Printf("[ERROR] Failed to delete ons topic (%s): %s", name, err)
 			}
@@ -199,6 +191,14 @@ resource "alicloud_ons_instance" "default" {
 
 variable "topic" {
  default = "%s"
+}
+
+resource "alicloud_ons_topic" "mutilple" {
+  count        = 10
+  topic_name   = format("%%s%%s", var.topic, count.index)
+  instance_id  = alicloud_ons_instance.default.id
+  message_type = 0
+  remark       = "dafault_ons_topic_remark"
 }
 `, name, name)
 }

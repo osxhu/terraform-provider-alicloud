@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -24,6 +23,8 @@ func resourceAlicloudHavip() *schema.Resource {
 		},
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(5 * time.Minute),
+			Update: schema.DefaultTimeout(5 * time.Minute),
+			Delete: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
 			"description": {
@@ -60,10 +61,7 @@ func resourceAlicloudHavipCreate(d *schema.ResourceData, meta interface{}) error
 	var response map[string]interface{}
 	action := "CreateHaVip"
 	request := make(map[string]interface{})
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	if v, ok := d.GetOk("description"); ok {
 		request["Description"] = v
 	}
@@ -79,10 +77,10 @@ func resourceAlicloudHavipCreate(d *schema.ResourceData, meta interface{}) error
 	request["RegionId"] = client.RegionId
 	request["VSwitchId"] = d.Get("vswitch_id")
 	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"OperationConflict", "IncorrectStatus.%s", "ServiceUnavailable", "SystemBusy", "LastTokenProcessing"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -103,6 +101,7 @@ func resourceAlicloudHavipCreate(d *schema.ResourceData, meta interface{}) error
 
 	return resourceAlicloudHavipRead(d, meta)
 }
+
 func resourceAlicloudHavipRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	vpcService := VpcService{client}
@@ -122,13 +121,11 @@ func resourceAlicloudHavipRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("vswitch_id", object["VSwitchId"])
 	return nil
 }
+
 func resourceAlicloudHavipUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	update := false
 	request := map[string]interface{}{
 		"HaVipId": d.Id(),
@@ -145,10 +142,10 @@ func resourceAlicloudHavipUpdate(d *schema.ResourceData, meta interface{}) error
 	if update {
 		action := "ModifyHaVipAttribute"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
-		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
+			response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 			if err != nil {
-				if NeedRetry(err) {
+				if IsExpectedErrors(err, []string{"OperationConflict", "IncorrectStatus.%s", "ServiceUnavailable", "SystemBusy", "LastTokenProcessing"}) || NeedRetry(err) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -163,24 +160,22 @@ func resourceAlicloudHavipUpdate(d *schema.ResourceData, meta interface{}) error
 	}
 	return resourceAlicloudHavipRead(d, meta)
 }
+
 func resourceAlicloudHavipDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteHaVip"
 	var response map[string]interface{}
-	conn, err := client.NewVpcClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"HaVipId": d.Id(),
 	}
 
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
-	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2016-04-28"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
+		response, err = client.RpcPost("Vpc", "2016-04-28", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"OperationConflict", "IncorrectStatus", "IncorrectStatus.%s", "ServiceUnavailable", "SystemBusy", "LastTokenProcessing"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}

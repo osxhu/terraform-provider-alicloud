@@ -109,7 +109,7 @@ func testAccCheckAlicloudPolarDBGlobalDatabaseNetworkDataSourceName(rand int, at
 		default = "tf-testAcc-%d"
 	}
 	data "alicloud_vpcs" "default" {
-		name_regex = "default-NODELETING"
+		name_regex = "^default-NODELETING$"
 	}
 	
 	data "alicloud_vswitches" "default" {
@@ -121,6 +121,7 @@ func testAccCheckAlicloudPolarDBGlobalDatabaseNetworkDataSourceName(rand int, at
 		pay_type   = "PostPaid"
 		db_type    = "MySQL"
 		db_version = "8.0"
+		category   = "Normal"
 	}
 	resource "alicloud_polardb_cluster" "default" {
 		db_type       = "MySQL"

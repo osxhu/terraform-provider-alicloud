@@ -43,7 +43,7 @@ func testSweepCenBandwidthLimit(region string) error {
 	request.PageSize = requests.NewInteger(PageSizeLarge)
 	request.PageNumber = requests.NewInteger(1)
 	for {
-		raw, err := client.WithCenClient(func(cenClient *cbn.Client) (interface{}, error) {
+		raw, err := client.WithCbnClient(func(cenClient *cbn.Client) (interface{}, error) {
 			return cenClient.DescribeCenInterRegionBandwidthLimits(request)
 		})
 		if err != nil {
@@ -75,17 +75,18 @@ func testSweepCenBandwidthLimit(region string) error {
 		name := fmt.Sprint(cen["Name"])
 		id := fmt.Sprint(cen["CenId"])
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
+			}
+			if skip {
+				log.Printf("[INFO] Skipping CEN bandwidth limit: %s (%s)", name, id)
+				continue
 			}
 		}
-		if skip {
-			log.Printf("[INFO] Skipping CEN bandwidth limit: %s (%s)", name, id)
-			continue
-		}
-
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
 			err := cenService.SetCenInterRegionBandwidthLimit(id, v.LocalRegionId, v.OppositeRegionId, 0)
 			if err != nil {
@@ -217,12 +218,12 @@ provider "alicloud" {
 
 data "alicloud_vpcs" "default" {
 	provider = "alicloud.fra"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vpcs" "default1" {
 	provider = "alicloud.sh"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 resource "alicloud_cen_instance" "default" {
@@ -289,12 +290,12 @@ provider "alicloud" {
 
 data "alicloud_vpcs" "default" {
 	provider = "alicloud.fra"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vpcs" "default1" {
 	provider = "alicloud.sh"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 resource "alicloud_cen_instance" "default" {
@@ -367,12 +368,12 @@ provider "alicloud" {
 
 data "alicloud_vpcs" "default" {
 	provider = "alicloud.fra"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vpcs" "default1" {
 	provider = "alicloud.sh"
-	name_regex = "default-NODELETING"
+	name_regex = "^default-NODELETING$"
 }
 
 data "alicloud_vpcs" "default2" {

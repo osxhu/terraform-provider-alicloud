@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
@@ -70,20 +69,15 @@ func (s *SlbService) DescribeSlb(id string) (*slb.DescribeLoadBalancerAttributeR
 
 func (s *SlbService) DescribeSlbRule(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeRuleAttribute"
 	request := map[string]interface{}{
 		"RuleId":   id,
 		"RegionId": s.client.RegionId,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("GET"), StringPointer("2014-05-15"), StringPointer("AK"), request, nil, &runtime)
+		response, err = client.RpcGet("Slb", "2014-05-15", action, request, nil)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -112,20 +106,24 @@ func (s *SlbService) DescribeSlbServerGroup(id string) (*slb.DescribeVServerGrou
 	request := slb.CreateDescribeVServerGroupAttributeRequest()
 	request.RegionId = s.client.RegionId
 	request.VServerGroupId = id
+
 	raw, err := s.client.WithSlbClient(func(slbClient *slb.Client) (interface{}, error) {
 		return slbClient.DescribeVServerGroupAttribute(request)
 	})
+	addDebug(request.GetActionName(), raw, request.RpcRequest, request)
+
 	if err != nil {
 		if IsExpectedErrors(err, []string{"The specified VServerGroupId does not exist", "InvalidParameter"}) {
-			return response, WrapErrorf(err, NotFoundMsg, AlibabaCloudSdkGoERROR)
+			return response, WrapErrorf(Error(GetNotFoundMessage("Slb:ServerGroup", id)), NotFoundMsg, ProviderERROR, response.RequestId)
 		}
 		return response, WrapErrorf(err, DefaultErrorMsg, id, request.GetActionName(), AlibabaCloudSdkGoERROR)
 	}
-	addDebug(request.GetActionName(), raw, request.RpcRequest, request)
+
 	response, _ = raw.(*slb.DescribeVServerGroupAttributeResponse)
 	if response.VServerGroupId == "" {
-		return response, WrapErrorf(Error(GetNotFoundMessage("SlbServerGroup", id)), NotFoundMsg, ProviderERROR)
+		return response, WrapErrorf(Error(GetNotFoundMessage("Slb:ServerGroup", id)), NotFoundMsg, ProviderERROR, response.RequestId)
 	}
+
 	return response, err
 }
 
@@ -221,20 +219,15 @@ func (s *SlbService) DescribeSlbListener(id string) (listener map[string]interfa
 
 func (s *SlbService) DescribeSlbAcl(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeAccessControlListAttribute"
 	request := map[string]interface{}{
 		"RegionId": s.client.RegionId,
 		"AclId":    id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -816,10 +809,7 @@ func (s *SlbService) tagsFromMap(m map[string]interface{}) []slb.TagResourcesTag
 }
 
 func (s *SlbService) ListTagResources(id string, resourceType string) (object interface{}, err error) {
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListTagResources"
 	request := map[string]interface{}{
 		"RegionId":     s.client.RegionId,
@@ -832,7 +822,7 @@ func (s *SlbService) ListTagResources(id string, resourceType string) (object in
 	for {
 		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-			response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err := client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -867,10 +857,7 @@ func (s *SlbService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 	if d.HasChange("tags") {
 		added, removed := parsingTags(d)
-		conn, err := s.client.NewSlbClient()
-		if err != nil {
-			return WrapError(err)
-		}
+		client := s.client
 
 		removedTagKeys := make([]string, 0)
 		for _, v := range removed {
@@ -890,7 +877,7 @@ func (s *SlbService) SetResourceTags(d *schema.ResourceData, resourceType string
 			}
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -922,7 +909,7 @@ func (s *SlbService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 			wait := incrementalWait(2*time.Second, 1*time.Second)
 			err := resource.Retry(10*time.Minute, func() *resource.RetryError {
-				response, err := conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+				response, err := client.RpcPost("Slb", "2014-05-15", action, nil, request, false)
 				if err != nil {
 					if NeedRetry(err) {
 						wait()
@@ -945,20 +932,15 @@ func (s *SlbService) SetResourceTags(d *schema.ResourceData, resourceType string
 
 func (s *SlbService) DescribeSlbLoadBalancer(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeLoadBalancerAttribute"
 	request := map[string]interface{}{
 		"RegionId":       s.client.RegionId,
 		"LoadBalancerId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -1005,20 +987,15 @@ func (s *SlbService) SlbLoadBalancerStateRefreshFunc(id string, failStates []str
 
 func (s *SlbService) DescribeSlbCaCertificate(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "DescribeCACertificates"
 	request := map[string]interface{}{
 		"RegionId":        s.client.RegionId,
 		"CACertificateId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -1049,20 +1026,15 @@ func (s *SlbService) DescribeSlbCaCertificate(id string) (object map[string]inte
 
 func (s *SlbService) DescribeSlbTlsCipherPolicy(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return nil, WrapError(err)
-	}
+	client := s.client
 	action := "ListTLSCipherPolicies"
 	request := map[string]interface{}{
 		"RegionId":          s.client.RegionId,
 		"TLSCipherPolicyId": id,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -1111,10 +1083,7 @@ func (s *SlbService) convertAclEntriesToString(v []interface{}) (string, error) 
 
 func (s *SlbService) DescribeSlbAclEntryAttachment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return object, WrapError(err)
-	}
+	client := s.client
 	parts, err := ParseResourceId(id, 2)
 	if err != nil {
 		return object, WrapError(err)
@@ -1126,11 +1095,9 @@ func (s *SlbService) DescribeSlbAclEntryAttachment(id string) (object map[string
 		"AclId":    parts[0],
 	}
 	idExist := false
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -1168,10 +1135,7 @@ func (s *SlbService) DescribeSlbAclEntryAttachment(id string) (object map[string
 
 func (s *SlbService) DescribeSlbServerGroupServerAttachment(id string) (object map[string]interface{}, err error) {
 	var response map[string]interface{}
-	conn, err := s.client.NewSlbClient()
-	if err != nil {
-		return object, WrapError(err)
-	}
+	client := s.client
 	parts, err := ParseResourceId(id, 3)
 	if err != nil {
 		return object, WrapError(err)
@@ -1183,11 +1147,9 @@ func (s *SlbService) DescribeSlbServerGroupServerAttachment(id string) (object m
 		"VServerGroupId": parts[0],
 	}
 	idExist := false
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(5*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2014-05-15"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Slb", "2014-05-15", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

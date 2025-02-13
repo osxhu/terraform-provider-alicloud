@@ -8,10 +8,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 
-	cs "github.com/alibabacloud-go/cs-20151215/v3/client"
+	cs "github.com/alibabacloud-go/cs-20151215/v5/client"
 )
 
-func TestAccAlicloudCSAutoscalingConfig_basic(t *testing.T) {
+func TestAccAliCloudCSAutoscalingConfig_basic(t *testing.T) {
 	var v *cs.CreateAutoscalingConfigRequest
 	resourceId := "alicloud_cs_autoscaling_config.default"
 	serviceFunc := func() interface{} {
@@ -40,7 +40,7 @@ func TestAccAlicloudCSAutoscalingConfig_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"cluster_id":                "${alicloud_cs_managed_kubernetes.default.0.id}",
+					"cluster_id":                "${alicloud_cs_managed_kubernetes.default.id}",
 					"cool_down_duration":        "10m",
 					"unneeded_duration":         "10m",
 					"utilization_threshold":     "0.5",
@@ -59,6 +59,61 @@ func TestAccAlicloudCSAutoscalingConfig_basic(t *testing.T) {
 						"scan_interval":             CHECKSET,
 						"scale_down_enabled":        CHECKSET,
 						"expander":                  CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"skip_nodes_with_system_pods":   "true",
+					"skip_nodes_with_local_storage": "false",
+					"daemonset_eviction_for_nodes":  "false",
+					"max_graceful_termination_sec":  "14400",
+					"min_replica_count":             "0",
+					"recycle_node_deletion_enabled": "false",
+					"scale_up_from_zero":            "true",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"skip_nodes_with_system_pods":   CHECKSET,
+						"skip_nodes_with_local_storage": CHECKSET,
+						"daemonset_eviction_for_nodes":  CHECKSET,
+						"max_graceful_termination_sec":  CHECKSET,
+						"min_replica_count":             CHECKSET,
+						"recycle_node_deletion_enabled": CHECKSET,
+						"scale_up_from_zero":            CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"cool_down_duration":        "5m",
+					"unneeded_duration":         "5m",
+					"utilization_threshold":     "0.6",
+					"gpu_utilization_threshold": "0.6",
+					"scan_interval":             "40s",
+					"scale_down_enabled":        "false",
+					"expander":                  "random",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"cluster_id":                CHECKSET,
+						"cool_down_duration":        CHECKSET,
+						"unneeded_duration":         CHECKSET,
+						"utilization_threshold":     CHECKSET,
+						"gpu_utilization_threshold": CHECKSET,
+						"scan_interval":             CHECKSET,
+						"scale_down_enabled":        CHECKSET,
+						"expander":                  CHECKSET,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"scaler_type": "cluster-autoscaler",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"scaler_type": CHECKSET,
 					}),
 				),
 			},
@@ -85,10 +140,11 @@ data "alicloud_instance_types" "default" {
 	cpu_core_count       = 4
 	memory_size          = 8
 	kubernetes_node_role = "Worker"
+	instance_type_family = "ecs.sn1ne"
 }
 
 data "alicloud_vpcs" "default" {
-	name_regex = "default-NODELETING"
+  name_regex = "^default-NODELETING-ACK$"
 }
 
 data "alicloud_vswitches" "default" {
@@ -109,24 +165,14 @@ locals {
 }
 
 resource "alicloud_cs_managed_kubernetes" "default" {
-  name_prefix                 = "${var.name}"
-  count                       = 1
-  cluster_spec                = "ack.pro.small"
-  worker_vswitch_ids          = [local.vswitch_id]
-  new_nat_gateway             = true
-  worker_instance_types       = ["${data.alicloud_instance_types.default.instance_types.0.id}"]
-  worker_number               = 2
-  node_port_range             = "30000-32767"
-  password                    = "Hello1234"
-  pod_cidr                    = cidrsubnet("10.0.0.0/8", 8, 36)
-  service_cidr                = cidrsubnet("172.16.0.0/16", 4, 7)
-  install_cloud_monitor       = true
-  slb_internet_enabled        = true
-  worker_disk_category        = "cloud_efficiency"
-  worker_data_disk_category   = "cloud_ssd"
-  worker_data_disk_size       = 200
-  worker_disk_size            = 40
-  worker_instance_charge_type = "PostPaid"
+  name                 = var.name
+  cluster_spec         = "ack.pro.small"
+  worker_vswitch_ids   = [local.vswitch_id]
+  new_nat_gateway      = false
+  pod_cidr             = cidrsubnet("10.0.0.0/8", 8, 37)
+  service_cidr         = cidrsubnet("172.16.0.0/16", 4, 7)
+  slb_internet_enabled = true
 }
+
 `, name)
 }

@@ -41,19 +41,16 @@ func testSweepArmsDispatchRule(region string) error {
 		"tf_testacc",
 	}
 
-	action := "ListDispatchRule"
-	request := make(map[string]interface{})
-	request["RegionId"] = client.RegionId
-	var response map[string]interface{}
-	conn, err := client.NewArmsClient()
-	if err != nil {
-		return WrapError(err)
+	action := "ListNotificationPolicies"
+	request := map[string]interface{}{
+		"RegionId": client.RegionId,
+		"Page":     1,
+		"Size":     PageSizeXLarge,
 	}
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
+	var response map[string]interface{}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(2*time.Minute, func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-08-08"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("ARMS", "2019-08-08", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -68,7 +65,7 @@ func testSweepArmsDispatchRule(region string) error {
 		log.Printf("[ERROR] %s failed: %v", action, err)
 		return nil
 	}
-	resp, err := jsonpath.Get("$.DispatchRules", response)
+	resp, err := jsonpath.Get("$.PageBean.NotificationPolicies", response)
 	if err != nil {
 		log.Printf("[ERROR] %v", WrapError(err))
 		return nil
@@ -78,26 +75,28 @@ func testSweepArmsDispatchRule(region string) error {
 		item := v.(map[string]interface{})
 		name := fmt.Sprint(item["Name"])
 		skip := true
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
 			}
-		}
-		if skip {
-			log.Printf("[INFO] Skipping dispatch rule: %s ", name)
-			continue
+			if skip {
+				log.Printf("[INFO] Skipping dispatch rule: %s ", name)
+				continue
+			}
 		}
 		log.Printf("[INFO] delete dispatch rule: %s ", name)
 
 		action = "DeleteDispatchRule"
 		request = map[string]interface{}{
-			"Id":       fmt.Sprint(item["RuleId"]),
+			"Id":       fmt.Sprint(item["Id"]),
 			"RegionId": client.RegionId,
 		}
 		wait = incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-08-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("ARMS", "2019-08-08", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -115,7 +114,7 @@ func testSweepArmsDispatchRule(region string) error {
 	return nil
 }
 
-func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
+func TestAccAliCloudARMSDispatchRule_basic(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_arms_dispatch_rule.default"
 	ra := resourceAttrInit(resourceId, ArmsDispatchRuleMap)
@@ -173,7 +172,22 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 									"name":             "${var.name}",
 								},
 							},
-							"notify_channels": []string{"dingTalk", "wechat"},
+							"notify_channels":   []string{"dingTalk", "wechat"},
+							"notify_start_time": "00:00",
+							"notify_end_time":   "23:59",
+						},
+					},
+					"notify_template": []map[string]interface{}{
+						{
+							"email_title":           "CreateEmailTitle",
+							"email_content":         "CreateEmailContent",
+							"email_recover_title":   "CreateEmailRecoverTitle",
+							"email_recover_content": "CreateEmailRecoverContent",
+							"sms_content":           "CreateSmsContent",
+							"sms_recover_content":   "CreateSmsRecoverContent",
+							"tts_content":           "CreateTtsContent",
+							"tts_recover_content":   "CreateTtsRecoverContent",
+							"robot_content":         "CreateRobotContent",
 						},
 					},
 				}),
@@ -184,6 +198,7 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 						"dispatch_type":                 "CREATE_ALERT",
 						"label_match_expression_grid.#": "1",
 						"notify_rules.#":                "1",
+						"notify_template.#":             "1",
 					}),
 				),
 			},
@@ -194,6 +209,16 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
 						"dispatch_rule_name": name + "_update",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"is_recover": true,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"is_recover": "true",
 					}),
 				),
 			},
@@ -222,15 +247,17 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 								{
 									"notify_object_id": "${alicloud_arms_alert_contact.default.id}",
 									"notify_type":      "ARMS_CONTACT",
-									"name":             "${var.name}",
+									"name":             "${var.name}_update",
 								},
 								{
 									"notify_object_id": "${alicloud_arms_alert_contact_group.default.id}",
 									"notify_type":      "ARMS_CONTACT_GROUP",
-									"name":             "${var.name}",
+									"name":             "${var.name}_update",
 								},
 							},
-							"notify_channels": []string{"dingTalk"},
+							"notify_channels":   []string{"dingTalk"},
+							"notify_start_time": "01:00",
+							"notify_end_time":   "02:00",
 						},
 					},
 				}),
@@ -271,11 +298,47 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"dispatch_type": "DISCARD_ALERT",
+					"label_match_expression_grid": []map[string]interface{}{
+						{
+							"label_match_expression_groups": []map[string]interface{}{
+								{
+									"label_match_expressions": []map[string]interface{}{
+										{
+											"key":      "_aliyun_arms_involvedObject_kind",
+											"value":    "app",
+											"operator": "ne",
+										},
+									},
+								},
+							},
+						},
+					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"dispatch_type": "DISCARD_ALERT",
+						"label_match_expression_grid.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"notify_template": []map[string]interface{}{
+						{
+							"email_title":           "UpdateCreateEmailTitle",
+							"email_content":         "UpdateEmailContent",
+							"email_recover_title":   "UpdateEmailRecoverTitle",
+							"email_recover_content": "UpdateEmailRecoverContent",
+							"sms_content":           "UpdateSmsContent",
+							"sms_recover_content":   "UpdateSmsRecoverContent",
+							"tts_content":           "UpdateTtsContent",
+							"tts_recover_content":   "UpdateTtsRecoverContent",
+							"robot_content":         "UpdateRobotContent",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"notify_template.#": "1",
 					}),
 				),
 			},
@@ -315,7 +378,22 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 									"name":             "${var.name}",
 								},
 							},
-							"notify_channels": []string{"dingTalk", "wechat"},
+							"notify_channels":   []string{"dingTalk", "wechat"},
+							"notify_start_time": "00:00",
+							"notify_end_time":   "23:59",
+						},
+					},
+					"notify_template": []map[string]interface{}{
+						{
+							"email_title":           "CreateEmailTitle",
+							"email_content":         "CreateEmailContent",
+							"email_recover_title":   "CreateEmailRecoverTitle",
+							"email_recover_content": "CreateEmailRecoverContent",
+							"sms_content":           "CreateSmsContent",
+							"sms_recover_content":   "CreateSmsRecoverContent",
+							"tts_content":           "CreateTtsContent",
+							"tts_recover_content":   "CreateTtsRecoverContent",
+							"robot_content":         "CreateRobotContent",
 						},
 					},
 				}),
@@ -326,6 +404,7 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 						"dispatch_type":                 "CREATE_ALERT",
 						"label_match_expression_grid.#": "1",
 						"notify_rules.#":                "1",
+						"notify_template.#":             "1",
 					}),
 				),
 			},
@@ -333,7 +412,7 @@ func TestAccAlicloudARMSDispatchRule_basic(t *testing.T) {
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"dispatch_type"},
+				ImportStateVerifyIgnore: []string{"dispatch_type", "is_recover"},
 			},
 		},
 	})
@@ -401,6 +480,21 @@ func TestUnitAlicloudARMSDispatchRule(t *testing.T) {
 						"notify_type":      "CreateDispatchRuleValue",
 					},
 				},
+				"notify_start_time": "00:00",
+				"notify_end_time":   "23:59",
+			},
+		},
+		"notify_template": []interface{}{
+			map[string]interface{}{
+				"email_title":           "CreateEmailTitle",
+				"email_content":         "CreateEmailContent",
+				"email_recover_title":   "CreateEmailRecoverTitle",
+				"email_recover_content": "CreateEmailRecoverContent",
+				"sms_content":           "CreateSmsContent",
+				"sms_recover_content":   "CreateSmsRecoverContent",
+				"tts_content":           "CreateTtsContent",
+				"tts_recover_content":   "CreateTtsRecoverContent",
+				"robot_content":         "CreateRobotContent",
 			},
 		},
 	}
@@ -464,6 +558,22 @@ func TestUnitAlicloudARMSDispatchRule(t *testing.T) {
 							"NotifyType":     "CreateDispatchRuleValue",
 						},
 					},
+					"NotifyStartTime": "00:00",
+					"NotifyEndTime":   "23:59",
+				},
+			},
+			"NotifyTemplate": []interface{}{
+				map[string]interface{}{
+					"EmailTitle":          "CreateEmailTitle",
+					"EmailContent":        "CreateEmailContent",
+					"EmailRecoverTitle":   "CreateEmailRecoverTitle",
+					"EmailRecoverContent": "CreateEmailRecoverContent",
+					"SmsContent":          "CreateSmsContent",
+					"SmsRecoverContent":   "CreateSmsRecoverContent",
+					"TtsContent":          "CreateTtsContent",
+					"TtsRecoverContent":   "CreateTtsRecoverContent",
+					"RobotContent":        "CreateRobotContent",
+					"RobotRecoverContent": "",
 				},
 			},
 			"State": "DefaultValue",
@@ -599,6 +709,21 @@ func TestUnitAlicloudARMSDispatchRule(t *testing.T) {
 							"notify_type":      "UpdateDispatchRuleValue",
 						},
 					},
+					"notify_start_time": "00:00",
+					"notify_end_time":   "23:59",
+				},
+			},
+			"notify_template": []interface{}{
+				map[string]interface{}{
+					"email_title":           "UpdateDispatchRuleEmailTitle",
+					"email_content":         "UpdateDispatchRuleEmailContent",
+					"email_recover_title":   "UpdateDispatchRuleEmailRecoverTitle",
+					"email_recover_content": "UpdateDispatchRuleEmailRecoverContent",
+					"sms_content":           "UpdateDispatchRuleSmsContent",
+					"sms_recover_content":   "UpdateDispatchRuleSmsRecoverContent",
+					"tts_content":           "UpdateDispatchRuleTtsContent",
+					"tts_recover_content":   "UpdateDispatchRuleTtsRecoverContent",
+					"robot_content":         "UpdateDispatchRuleRobotContent",
 				},
 			},
 		}
@@ -649,6 +774,22 @@ func TestUnitAlicloudARMSDispatchRule(t *testing.T) {
 								"NotifyType":     "UpdateDispatchRuleValue",
 							},
 						},
+						"NotifyStartTime": "01:00",
+						"NotifyEndTime":   "10:00",
+					},
+				},
+				"NotifyTemplate": []interface{}{
+					map[string]interface{}{
+						"EmailTitle":          "UpdateCreateEmailTitle",
+						"EmailContent":        "UpdateEmailContent",
+						"EmailRecoverTitle":   "UpdateEmailRecoverTitle",
+						"EmailRecoverContent": "UpdateEmailRecoverContent",
+						"SmsContent":          "UpdateSmsContent",
+						"SmsRecoverContent":   "UpdateSmsRecoverContent",
+						"TtsContent":          "UpdateTtsContent",
+						"TtsRecoverContent":   "UpdateTtsRecoverContent",
+						"RobotContent":        "UpdateRobotContent",
+						"RobotRecoverContent": "",
 					},
 				},
 			},

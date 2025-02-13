@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -23,9 +22,9 @@ func resourceAlicloudGraphDatabaseDbInstance() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(60 * time.Minute),
+			Create: schema.DefaultTimeout(120 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
-			Update: schema.DefaultTimeout(60 * time.Minute),
+			Update: schema.DefaultTimeout(120 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
 			"db_instance_ip_array": {
@@ -115,6 +114,14 @@ func resourceAlicloudGraphDatabaseDbInstance() *schema.Resource {
 				Computed: true,
 				ForceNew: true,
 			},
+			"connection_string": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"port": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -124,10 +131,7 @@ func resourceAlicloudGraphDatabaseDbInstanceCreate(d *schema.ResourceData, meta 
 	var response map[string]interface{}
 	action := "CreateDBInstance"
 	request := make(map[string]interface{})
-	conn, err := client.NewGdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["DBInstanceCategory"] = strings.ToLower(d.Get("db_instance_category").(string))
 	if v, ok := d.GetOk("db_instance_description"); ok {
 		request["DBInstanceDescription"] = v
@@ -149,11 +153,9 @@ func resourceAlicloudGraphDatabaseDbInstanceCreate(d *schema.ResourceData, meta 
 		request["VPCId"] = v
 	}
 	request["ClientToken"] = buildClientToken("CreateDBInstance")
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("gdb", "2019-09-03", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -201,6 +203,8 @@ func resourceAlicloudGraphDatabaseDbInstanceRead(d *schema.ResourceData, meta in
 	d.Set("vswitch_id", object["VSwitchId"])
 	d.Set("zone_id", object["ZoneId"])
 	d.Set("vpc_id", object["VpcId"])
+	d.Set("connection_string", object["ConnectionString"])
+	d.Set("port", object["Port"])
 	if DBInstanceIPArray, ok := object["DBInstanceIPArray"]; ok {
 		DBInstanceIPArrayAry, ok := DBInstanceIPArray.([]interface{})
 		if ok && len(DBInstanceIPArrayAry) > 0 {
@@ -222,10 +226,7 @@ func resourceAlicloudGraphDatabaseDbInstanceRead(d *schema.ResourceData, meta in
 func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	gdbService := GdbService{client}
-	conn, err := client.NewGdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	d.Partial(true)
 
@@ -243,7 +244,7 @@ func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta 
 		action := "ModifyDBInstanceDescription"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("gdb", "2019-09-03", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -285,10 +286,10 @@ func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta 
 				modifyDBInstanceAccessWhiteListReq["DBInstanceIPArrayName"] = dBInstanceIPArrayArg["db_instance_ip_array_name"]
 				modifyDBInstanceAccessWhiteListReq["SecurityIps"] = "Empty"
 				wait := incrementalWait(3*time.Second, 3*time.Second)
-				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, modifyDBInstanceAccessWhiteListReq, &util.RuntimeOptions{})
+				err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
+					response, err = client.RpcPost("gdb", "2019-09-03", action, nil, modifyDBInstanceAccessWhiteListReq, false)
 					if err != nil {
-						if NeedRetry(err) {
+						if NeedRetry(err) || IsExpectedErrors(err, []string{"IncorrectDBInstanceState"}) {
 							wait()
 							return resource.RetryableError(err)
 						}
@@ -312,10 +313,10 @@ func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta 
 				modifyDBInstanceAccessWhiteListReq["DBInstanceIPArrayName"] = dBInstanceIPArrayArg["db_instance_ip_array_name"]
 				modifyDBInstanceAccessWhiteListReq["SecurityIps"] = dBInstanceIPArrayArg["security_ips"]
 				wait := incrementalWait(3*time.Second, 3*time.Second)
-				err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-					response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, modifyDBInstanceAccessWhiteListReq, &util.RuntimeOptions{})
+				err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
+					response, err = client.RpcPost("gdb", "2019-09-03", action, nil, modifyDBInstanceAccessWhiteListReq, false)
 					if err != nil {
-						if NeedRetry(err) {
+						if NeedRetry(err) || IsExpectedErrors(err, []string{"IncorrectDBInstanceState"}) {
 							wait()
 							return resource.RetryableError(err)
 						}
@@ -329,7 +330,10 @@ func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta 
 				}
 			}
 		}
-
+		stateConf := BuildStateConf([]string{}, []string{"Running"}, d.Timeout(schema.TimeoutUpdate), 5*time.Second, gdbService.GraphDatabaseDbInstanceStateRefreshFunc(d.Id(), []string{}))
+		if _, err := stateConf.WaitForState(); err != nil {
+			return WrapErrorf(err, IdMsg, d.Id())
+		}
 		d.SetPartial("db_instance_ip_array")
 	}
 
@@ -350,13 +354,11 @@ func resourceAlicloudGraphDatabaseDbInstanceUpdate(d *schema.ResourceData, meta 
 		modifyDBInstanceSpecReq["DBInstanceStorageType"] = d.Get("db_instance_storage_type")
 		action := "ModifyDBInstanceSpec"
 		modifyDBInstanceSpecReq["ClientToken"] = buildClientToken("ModifyDBInstanceSpec")
-		runtime := util.RuntimeOptions{}
-		runtime.SetAutoretry(true)
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, modifyDBInstanceSpecReq, &runtime)
+			response, err = client.RpcPost("gdb", "2019-09-03", action, nil, modifyDBInstanceSpecReq, true)
 			if err != nil {
-				if NeedRetry(err) {
+				if NeedRetry(err) || IsExpectedErrors(err, []string{"IncorrectDBInstanceState"}) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -384,17 +386,14 @@ func resourceAlicloudGraphDatabaseDbInstanceDelete(d *schema.ResourceData, meta 
 	gdbService := GdbService{client}
 	action := "DeleteDBInstance"
 	var response map[string]interface{}
-	conn, err := client.NewGdsClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request := map[string]interface{}{
 		"DBInstanceId": d.Id(),
 	}
 
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-03"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("gdb", "2019-09-03", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()

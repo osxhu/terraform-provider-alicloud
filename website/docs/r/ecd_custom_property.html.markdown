@@ -1,5 +1,5 @@
 ---
-subcategory: "Elastic Desktop Service(EDS)"
+subcategory: "Elastic Desktop Service (ECD)"
 layout: "alicloud"
 page_title: "Alicloud: alicloud_ecd_custom_property"
 sidebar_current: "docs-alicloud-resource-ecd-custom-property"
@@ -7,13 +7,13 @@ description: |-
   Provides a Alicloud ECD Custom Property resource.
 ---
 
-# alicloud\_ecd\_custom\_property
+# alicloud_ecd_custom_property
 
 Provides a ECD Custom Property resource.
 
-For information about ECD Custom Property and how to use it, see [What is Custom Property](https://help.aliyun.com/document_detail/436381.html).
+For information about ECD Custom Property and how to use it, see [What is Custom Property](https://www.alibabacloud.com/help/en/wuying-workspace/developer-reference/api-eds-user-2021-03-08-createproperty-desktop).
 
--> **NOTE:** Available in v1.176.0+.
+-> **NOTE:** Available since v1.176.0.
 
 -> **NOTE:** Up to 10 different attributes can be created under an alibaba cloud account. Up to 50 different attribute values can be added under an attribute.
 
@@ -21,7 +21,17 @@ For information about ECD Custom Property and how to use it, see [What is Custom
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_ecd_custom_property&exampleId=3db4efc6-3592-2358-c623-7557341bd10e8a65d189&activeTab=example&spm=docs.r.ecd_custom_property.0.3db4efc635&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+provider "alicloud" {
+  region = "cn-shanghai"
+}
+
 resource "alicloud_ecd_custom_property" "example" {
   property_key = "example_key"
   property_values {
@@ -35,9 +45,9 @@ resource "alicloud_ecd_custom_property" "example" {
 The following arguments are supported:
 
 * `property_key` - (Required) The Custom attribute key.
-* `property_values` - (Optional) Custom attribute sets the value of. See the following `Block property_values`.
+* `property_values` - (Optional) Custom attribute sets the value of. See [`property_values`](#property_values) below.
 
-#### Block property_values
+### `property_values`
 
 The property_values supports the following: 
 
@@ -50,7 +60,7 @@ The following attributes are exported:
 
 * `id` - The resource ID in terraform of Custom Property.
 
-### Timeouts
+## Timeouts
 
 The `timeouts` block allows you to specify [timeouts](https://www.terraform.io/docs/configuration-0-11/resources.html#timeouts) for certain actions:
 

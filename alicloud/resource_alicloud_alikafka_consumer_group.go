@@ -5,12 +5,9 @@ import (
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
-
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAlicloudAlikafkaConsumerGroup() *schema.Resource {
@@ -33,7 +30,7 @@ func resourceAlicloudAlikafkaConsumerGroup() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringLenBetween(1, 64),
+				ValidateFunc: StringLenBetween(1, 64),
 			},
 			"description": {
 				Type:     schema.TypeString,
@@ -50,10 +47,7 @@ func resourceAlicloudAlikafkaConsumerGroupCreate(d *schema.ResourceData, meta in
 	var response map[string]interface{}
 	action := "CreateConsumerGroup"
 	request := make(map[string]interface{})
-	conn, err := client.NewAlikafkaClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	request["ConsumerId"] = d.Get("consumer_id")
 	request["InstanceId"] = d.Get("instance_id")
 	request["RegionId"] = client.RegionId
@@ -62,7 +56,7 @@ func resourceAlicloudAlikafkaConsumerGroupCreate(d *schema.ResourceData, meta in
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-16"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("alikafka", "2019-09-16", action, nil, request, false)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -125,16 +119,13 @@ func resourceAlicloudAlikafkaConsumerGroupUpdate(d *schema.ResourceData, meta in
 
 func resourceAlicloudAlikafkaConsumerGroupDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
+	alikafkaService := AlikafkaService{client}
 	parts, err := ParseResourceId(d.Id(), 2)
 	if err != nil {
 		return WrapError(err)
 	}
 	action := "DeleteConsumerGroup"
 	var response map[string]interface{}
-	conn, err := client.NewAlikafkaClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	request := map[string]interface{}{
 		"ConsumerId": parts[1],
 		"InstanceId": parts[0],
@@ -143,7 +134,7 @@ func resourceAlicloudAlikafkaConsumerGroupDelete(d *schema.ResourceData, meta in
 	request["RegionId"] = client.RegionId
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2019-09-16"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("alikafka", "2019-09-16", action, nil, request, false)
 		if err != nil {
 			if IsExpectedErrors(err, []string{ThrottlingUser, "ONS_SYSTEM_FLOW_CONTROL"}) || NeedRetry(err) {
 				wait()
@@ -159,6 +150,10 @@ func resourceAlicloudAlikafkaConsumerGroupDelete(d *schema.ResourceData, meta in
 	}
 	if fmt.Sprint(response["Success"]) == "false" {
 		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
+	}
+	stateConf := BuildStateConf([]string{}, []string{}, d.Timeout(schema.TimeoutDelete), 5*time.Second, alikafkaService.AliKafkaConsumerStateRefreshFunc(d.Id(), "ServiceStatus", []string{}))
+	if _, err := stateConf.WaitForState(); err != nil {
+		return WrapErrorf(err, IdMsg, d.Id())
 	}
 	return nil
 }

@@ -9,15 +9,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 )
 
-func TestAccAlicloudVPCBgpPeer_basic0(t *testing.T) {
+func TestAccAliCloudVPCBgpPeer_basic0(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.VbrSupportRegions)
 	var v map[string]interface{}
 	resourceId := "alicloud_vpc_bgp_peer.default"
 	checkoutSupportedRegions(t, true, connectivity.VPCBgpGroupSupportRegions)
 	ra := resourceAttrInit(resourceId, AlicloudVPCBgpPeerMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeVpcBgpPeer")
+		return &ExpressConnectServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeExpressConnectBgpPeer")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -73,15 +73,15 @@ func TestAccAlicloudVPCBgpPeer_basic0(t *testing.T) {
 		},
 	})
 }
-func TestAccAlicloudVPCBgpPeer_basic1(t *testing.T) {
+func TestAccAliCloudVPCBgpPeer_basic1(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.VbrSupportRegions)
 	var v map[string]interface{}
 	resourceId := "alicloud_vpc_bgp_peer.default"
 	checkoutSupportedRegions(t, true, connectivity.VPCBgpGroupSupportRegions)
 	ra := resourceAttrInit(resourceId, AlicloudVPCBgpPeerMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &VpcService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeVpcBgpPeer")
+		return &ExpressConnectServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeExpressConnectBgpPeer")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(10000, 99999)
@@ -154,6 +154,15 @@ resource "alicloud_vpc_bgp_group" "default" {
   description    = var.name
   local_asn      = 64512
   peer_asn       = 1111
+  router_id      = alicloud_express_connect_virtual_border_router.default.id
+}
+
+resource "alicloud_vpc_bgp_group" "default1" {
+  auth_key       = "YourPassword+12345678"
+  bgp_group_name = var.name
+  description    = var.name
+  local_asn      = 64513
+  peer_asn       = 1112
   router_id      = alicloud_express_connect_virtual_border_router.default.id
 }
 `, name, acctest.RandIntRange(1, 2999))

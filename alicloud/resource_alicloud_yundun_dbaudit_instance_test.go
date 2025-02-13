@@ -76,17 +76,18 @@ func testSweepDbauditInstances(region string) error {
 	for _, v := range instances {
 		name := v.Description
 		skip := true
-		for _, prefix := range prefixes {
-			if name != "" && strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
-				skip = false
-				break
+		if !sweepAll() {
+			for _, prefix := range prefixes {
+				if name != "" && strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+					skip = false
+					break
+				}
+			}
+			if skip {
+				log.Printf("[INFO] Skipping Dbaudit Instance: %s", name)
+				continue
 			}
 		}
-		if skip {
-			log.Printf("[INFO] Skipping Dbaudit Instance: %s", name)
-			continue
-		}
-
 		log.Printf("[INFO] Deleting Dbaudit Instance %s .", v.InstanceId)
 
 		releaseReq := yundun_dbaudit.CreateRefundInstanceRequest()
@@ -189,16 +190,6 @@ func TestAccAlicloudYundunDbauditInstance_basic(t *testing.T) {
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"plan_code": "alpha.basic",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheck(map[string]string{
-						"plan_code": "alpha.basic",
-					}),
-				),
-			},
-			{
-				Config: testAccConfig(map[string]interface{}{
 					"tags": map[string]string{
 						"Created": "TF",
 						"For":     "acceptance test",
@@ -239,6 +230,16 @@ func TestAccAlicloudYundunDbauditInstance_basic(t *testing.T) {
 						"tags.Created": REMOVEKEY,
 						"tags.For":     REMOVEKEY,
 						"tags.Updated": REMOVEKEY,
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"plan_code": "alpha.basic",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"plan_code": "alpha.basic",
 					}),
 				),
 			},

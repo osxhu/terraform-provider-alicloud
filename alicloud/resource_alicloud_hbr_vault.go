@@ -1,68 +1,46 @@
+// Package alicloud. This file is generated automatically. Please do not modify it manually, thank you!
 package alicloud
 
 import (
 	"fmt"
+	"github.com/PaesslerAG/jsonpath"
 	"log"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
-func resourceAlicloudHbrVault() *schema.Resource {
+func resourceAliCloudHbrVault() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAlicloudHbrVaultCreate,
-		Read:   resourceAlicloudHbrVaultRead,
-		Update: resourceAlicloudHbrVaultUpdate,
-		Delete: resourceAlicloudHbrVaultDelete,
+		Create: resourceAliCloudHbrVaultCreate,
+		Read:   resourceAliCloudHbrVaultRead,
+		Update: resourceAliCloudHbrVaultUpdate,
+		Delete: resourceAliCloudHbrVaultDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
 		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(1 * time.Minute),
+			Create: schema.DefaultTimeout(5 * time.Minute),
+			Update: schema.DefaultTimeout(5 * time.Minute),
+			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
+			"create_time": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 			"description": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"status": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"vault_name": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"vault_storage_class": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				Computed:     true,
-				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"STANDARD"}, false),
-			},
-			"vault_type": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				Computed:     true,
-				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"STANDARD", "OTS_BACKUP"}, false),
-			},
-			"redundancy_type": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"LRS", "ZRS"}, false),
-			},
 			"encrypt_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				Computed:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"HBR_PRIVATE", "KMS"}, false),
+				Computed:     true,
+				ValidateFunc: StringInSlice([]string{"HBR_PRIVATE", "KMS"}, false),
 			},
 			"kms_key_id": {
 				Type:     schema.TypeString,
@@ -75,45 +53,87 @@ func resourceAlicloudHbrVault() *schema.Resource {
 					return false
 				},
 			},
+			"region_id": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"resource_group_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
+			"status": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"tags": tagsSchema(),
+			"vault_name": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
+			"vault_storage_class": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				Computed:     true,
+				ValidateFunc: StringInSlice([]string{"STANDARD"}, false),
+			},
+			"vault_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				Computed:     true,
+				ValidateFunc: StringInSlice([]string{"STANDARD", "OTS_BACKUP"}, false),
+			},
+			"worm_enabled": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"redundancy_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: StringInSlice([]string{"LRS", "ZRS"}, false),
+				Removed:      "Field `redundancy_type` has been removed from provider version 1.209.1.",
+			},
 		},
 	}
 }
 
-func resourceAlicloudHbrVaultCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudHbrVaultCreate(d *schema.ResourceData, meta interface{}) error {
+
 	client := meta.(*connectivity.AliyunClient)
-	var response map[string]interface{}
+
 	action := "CreateVault"
-	request := make(map[string]interface{})
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var request map[string]interface{}
+	var response map[string]interface{}
+	query := make(map[string]interface{})
+	var err error
+	request = make(map[string]interface{})
+	request["VaultRegionId"] = client.RegionId
+
 	if v, ok := d.GetOk("description"); ok {
 		request["Description"] = v
-	}
-	request["VaultRegionId"] = client.RegionId
-	request["VaultName"] = d.Get("vault_name")
-	if v, ok := d.GetOk("vault_storage_class"); ok {
-		request["VaultStorageClass"] = v
 	}
 	if v, ok := d.GetOk("vault_type"); ok {
 		request["VaultType"] = v
 	}
-	if v, ok := d.GetOk("redundancy_type"); ok {
-		request["RedundancyType"] = v
+	if v, ok := d.GetOk("vault_storage_class"); ok {
+		request["VaultStorageClass"] = v
 	}
-
+	request["VaultName"] = d.Get("vault_name")
 	if v, ok := d.GetOk("encrypt_type"); ok {
 		request["EncryptType"] = v
 	}
-
 	if v, ok := d.GetOk("kms_key_id"); ok {
 		request["KmsKeyId"] = v
 	}
-
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	if v, ok := d.GetOkExists("worm_enabled"); ok {
+		request["WormEnabled"] = v
+	}
+	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("hbr", "2017-09-08", action, query, request, true)
 		if err != nil {
 			if NeedRetry(err) {
 				wait()
@@ -124,73 +144,92 @@ func resourceAlicloudHbrVaultCreate(d *schema.ResourceData, meta interface{}) er
 		return nil
 	})
 	addDebug(action, response, request)
+
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_hbr_vault", action, AlibabaCloudSdkGoERROR)
 	}
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
-	}
 
 	d.SetId(fmt.Sprint(response["VaultId"]))
-	hbrService := HbrService{client}
-	stateConf := BuildStateConf([]string{}, []string{"CREATED"}, d.Timeout(schema.TimeoutCreate), 5*time.Second, hbrService.HbrVaultStateRefreshFunc(d.Id(), []string{}))
+
+	hbrServiceV2 := HbrServiceV2{client}
+	stateConf := BuildStateConf([]string{}, []string{"CREATED"}, d.Timeout(schema.TimeoutCreate), 5*time.Second, hbrServiceV2.HbrVaultStateRefreshFunc(d.Id(), "Status", []string{}))
 	if _, err := stateConf.WaitForState(); err != nil {
 		return WrapErrorf(err, IdMsg, d.Id())
 	}
 
-	return resourceAlicloudHbrVaultRead(d, meta)
+	return resourceAliCloudHbrVaultUpdate(d, meta)
 }
 
-func resourceAlicloudHbrVaultRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudHbrVaultRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	hbrService := HbrService{client}
-	object, err := hbrService.DescribeHbrVault(d.Id())
+	hbrServiceV2 := HbrServiceV2{client}
+
+	objectRaw, err := hbrServiceV2.DescribeHbrVault(d.Id())
 	if err != nil {
-		if NotFoundError(err) {
-			log.Printf("[DEBUG] Resource alicloud_hbr_vault hbrService.DescribeHbrVault Failed!!! %s", err)
+		if !d.IsNewResource() && NotFoundError(err) {
+			log.Printf("[DEBUG] Resource alicloud_hbr_vault DescribeHbrVault Failed!!! %s", err)
 			d.SetId("")
 			return nil
 		}
 		return WrapError(err)
 	}
-	d.Set("description", object["Description"])
-	d.Set("status", object["Status"])
-	d.Set("vault_name", object["VaultName"])
-	d.Set("vault_storage_class", object["VaultStorageClass"])
-	d.Set("vault_type", object["VaultType"])
-	d.Set("redundancy_type", object["RedundancyType"])
-	d.Set("encrypt_type", object["EncryptType"])
-	d.Set("kms_key_id", object["KmsKeyId"])
+
+	d.Set("create_time", objectRaw["CreatedTime"])
+	d.Set("description", objectRaw["Description"])
+	d.Set("encrypt_type", objectRaw["EncryptType"])
+	d.Set("kms_key_id", objectRaw["KmsKeyId"])
+	d.Set("region_id", objectRaw["VaultRegionId"])
+	d.Set("resource_group_id", objectRaw["ResourceGroupId"])
+	d.Set("status", objectRaw["Status"])
+	d.Set("vault_name", objectRaw["VaultName"])
+	d.Set("vault_storage_class", objectRaw["VaultStorageClass"])
+	d.Set("vault_type", objectRaw["VaultType"])
+	d.Set("worm_enabled", objectRaw["WormEnabled"])
+
+	tagsMaps, _ := jsonpath.Get("$.Tags.Tag", objectRaw)
+	d.Set("tags", tagsToMap(tagsMaps))
 
 	return nil
 }
 
-func resourceAlicloudHbrVaultUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudHbrVaultUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
+	var request map[string]interface{}
 	var response map[string]interface{}
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var query map[string]interface{}
 	update := false
-	request := map[string]interface{}{
-		"VaultId": d.Id(),
-	}
-	if d.HasChange("description") {
+	d.Partial(true)
+
+	var err error
+	action := "UpdateVault"
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+	request["VaultId"] = d.Id()
+
+	if !d.IsNewResource() && d.HasChange("description") {
 		update = true
 		if v, ok := d.GetOk("description"); ok {
 			request["Description"] = v
 		}
 	}
-	if d.HasChange("vault_name") {
+
+	if !d.IsNewResource() && d.HasChange("vault_name") {
 		update = true
-		request["VaultName"] = d.Get("vault_name")
 	}
+	request["VaultName"] = d.Get("vault_name")
+
+	if !d.IsNewResource() && d.HasChange("worm_enabled") {
+		update = true
+
+		if v, ok := d.GetOkExists("worm_enabled"); ok {
+			request["WormEnabled"] = v
+		}
+	}
+
 	if update {
-		action := "UpdateVault"
-		wait := incrementalWait(3*time.Second, 3*time.Second)
+		wait := incrementalWait(3*time.Second, 5*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("hbr", "2017-09-08", action, query, request, true)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -204,28 +243,61 @@ func resourceAlicloudHbrVaultUpdate(d *schema.ResourceData, meta interface{}) er
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
-		if fmt.Sprint(response["Success"]) == "false" {
-			return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
+	}
+	update = false
+	action = "ChangeResourceGroup"
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+	request["ResourceId"] = d.Id()
+
+	if _, ok := d.GetOk("resource_group_id"); ok && d.HasChange("resource_group_id") {
+		update = true
+	}
+	request["NewResourceGroupId"] = d.Get("resource_group_id")
+	request["ResourceType"] = "vault"
+	if update {
+		wait := incrementalWait(3*time.Second, 5*time.Second)
+		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+			response, err = client.RpcPost("hbr", "2017-09-08", action, query, request, true)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return resource.RetryableError(err)
+				}
+				return resource.NonRetryableError(err)
+			}
+			return nil
+		})
+		addDebug(action, response, request)
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
 	}
-	return resourceAlicloudHbrVaultRead(d, meta)
+
+	if d.HasChange("tags") {
+		hbrServiceV2 := HbrServiceV2{client}
+		if err := hbrServiceV2.SetResourceTags(d, "vault"); err != nil {
+			return WrapError(err)
+		}
+	}
+	d.Partial(false)
+	return resourceAliCloudHbrVaultRead(d, meta)
 }
 
-func resourceAlicloudHbrVaultDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAliCloudHbrVaultDelete(d *schema.ResourceData, meta interface{}) error {
+
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteVault"
+	var request map[string]interface{}
 	var response map[string]interface{}
-	conn, err := client.NewHbrClient()
-	if err != nil {
-		return WrapError(err)
-	}
-	request := map[string]interface{}{
-		"VaultId": d.Id(),
-	}
+	query := make(map[string]interface{})
+	var err error
+	request = make(map[string]interface{})
+	request["VaultId"] = d.Id()
 
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	wait := incrementalWait(3*time.Second, 5*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-08"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("hbr", "2017-09-08", action, query, request, true)
 		if err != nil {
 			if IsExpectedErrors(err, []string{"CannotDeleteReplicationSourceVault"}) || NeedRetry(err) {
 				wait()
@@ -236,11 +308,13 @@ func resourceAlicloudHbrVaultDelete(d *schema.ResourceData, meta interface{}) er
 		return nil
 	})
 	addDebug(action, response, request)
+
 	if err != nil {
+		if NotFoundError(err) {
+			return nil
+		}
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 	}
-	if fmt.Sprint(response["Success"]) == "false" {
-		return WrapError(fmt.Errorf("%s failed, response: %v", action, response))
-	}
+
 	return nil
 }

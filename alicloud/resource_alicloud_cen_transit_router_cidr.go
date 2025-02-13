@@ -2,13 +2,13 @@ package alicloud
 
 import (
 	"fmt"
-	util "github.com/alibabacloud-go/tea-utils/service"
+	"regexp"
+	"time"
+
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
-	"regexp"
-	"time"
 )
 
 func resourceAlicloudCenTransitRouterCidr() *schema.Resource {
@@ -63,10 +63,7 @@ func resourceAlicloudCenTransitRouterCidrCreate(d *schema.ResourceData, meta int
 	var response map[string]interface{}
 	action := "CreateTransitRouterCidr"
 	request := make(map[string]interface{})
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	request["RegionId"] = client.RegionId
 	request["ClientToken"] = buildClientToken("CreateTransitRouterCidr")
@@ -85,11 +82,9 @@ func resourceAlicloudCenTransitRouterCidrCreate(d *schema.ResourceData, meta int
 		request["PublishCidrRoute"] = v
 	}
 
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) || IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) {
 				wait()
@@ -177,14 +172,9 @@ func resourceAlicloudCenTransitRouterCidrUpdate(d *schema.ResourceData, meta int
 
 	if update {
 		action := "ModifyTransitRouterCidr"
-		conn, err := client.NewCbnClient()
-		if err != nil {
-			return WrapError(err)
-		}
-
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -209,10 +199,7 @@ func resourceAlicloudCenTransitRouterCidrDelete(d *schema.ResourceData, meta int
 	action := "DeleteTransitRouterCidr"
 	var response map[string]interface{}
 
-	conn, err := client.NewCbnClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 
 	parts, err := ParseResourceId(d.Id(), 2)
 	if err != nil {
@@ -226,11 +213,9 @@ func resourceAlicloudCenTransitRouterCidrDelete(d *schema.ResourceData, meta int
 		"TransitRouterCidrId": parts[1],
 	}
 
-	runtime := util.RuntimeOptions{}
-	runtime.SetAutoretry(true)
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-09-12"), StringPointer("AK"), nil, request, &runtime)
+		response, err = client.RpcPost("Cbn", "2017-09-12", action, nil, request, true)
 		if err != nil {
 			if NeedRetry(err) || IsExpectedErrors(err, []string{"Operation.Blocking", "IncorrectStatus.Status"}) {
 				wait()

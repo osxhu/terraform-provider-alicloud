@@ -6,11 +6,9 @@ import (
 	"strings"
 	"time"
 
-	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAlicloudNasMountTarget() *schema.Resource {
@@ -24,6 +22,7 @@ func resourceAlicloudNasMountTarget() *schema.Resource {
 		},
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(40 * time.Minute),
+			Update: schema.DefaultTimeout(40 * time.Minute),
 			Delete: schema.DefaultTimeout(40 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
@@ -36,7 +35,13 @@ func resourceAlicloudNasMountTarget() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"security_group_id": {
+			"vpc_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+				Computed: true,
+			},
+			"vswitch_id": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
@@ -45,16 +50,23 @@ func resourceAlicloudNasMountTarget() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: validation.StringInSlice([]string{"Active", "Inactive"}, false),
+				ValidateFunc: StringInSlice([]string{"Active", "Inactive"}, false),
 			},
-			"vswitch_id": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+			"network_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				ValidateFunc: StringInSlice([]string{"Vpc", "Classic"}, false),
+				Computed:     true,
 			},
 			"mount_target_domain": {
 				Type:     schema.TypeString,
 				Computed: true,
+			},
+			"security_group_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
 			},
 		},
 	}
@@ -62,40 +74,44 @@ func resourceAlicloudNasMountTarget() *schema.Resource {
 
 func resourceAlicloudNasMountTargetCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	nasService := NasService{client}
 	var response map[string]interface{}
 	action := "CreateMountTarget"
 	request := make(map[string]interface{})
-	conn, err := client.NewNasClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
+	request["FileSystemId"] = d.Get("file_system_id")
 	if v, ok := d.GetOk("access_group_name"); ok {
 		request["AccessGroupName"] = v
 	}
-
-	request["FileSystemId"] = d.Get("file_system_id")
-	request["NetworkType"] = string(Classic)
 	if v, ok := d.GetOk("security_group_id"); ok {
 		request["SecurityGroupId"] = v
 	}
-
-	vswitchId := Trim(d.Get("vswitch_id").(string))
-	if vswitchId != "" {
-		vpcService := VpcService{client}
-		vsw, err := vpcService.DescribeVSwitchWithTeadsl(vswitchId)
-		if err != nil {
-			return WrapError(err)
-		}
+	if v, ok := d.GetOk("network_type"); ok {
+		request["NetworkType"] = v
+	} else {
 		request["NetworkType"] = string(Vpc)
-		request["VpcId"] = vsw["VpcId"]
-		request["VSwitchId"] = vswitchId
+	}
+	if v, ok := d.GetOk("vpc_id"); ok {
+		request["VpcId"] = v
+		if v, ok := d.GetOk("vswitch_id"); ok {
+			request["VSwitchId"] = v
+		}
+	} else {
+		vswitchId := Trim(d.Get("vswitch_id").(string))
+		if vswitchId != "" {
+			vpcService := VpcService{client}
+			vsw, err := vpcService.DescribeVSwitchWithTeadsl(vswitchId)
+			if err != nil {
+				return WrapError(err)
+			}
+			request["VpcId"] = vsw["VpcId"]
+			request["VSwitchId"] = vswitchId
+		}
 	}
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationDenied.InvalidState"}) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -107,13 +123,12 @@ func resourceAlicloudNasMountTargetCreate(d *schema.ResourceData, meta interface
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_nas_mount_target", action, AlibabaCloudSdkGoERROR)
 	}
-
 	d.SetId(fmt.Sprint(request["FileSystemId"], ":", response["MountTargetDomain"]))
-	stateConf := BuildStateConf([]string{}, []string{"Active"}, d.Timeout(schema.TimeoutCreate), 10*time.Second, nasService.NasMountTargetStateRefreshFunc(d.Id(), []string{}))
+	nasService := NasService{client}
+	stateConf := BuildStateConf([]string{"Pending"}, []string{"Active"}, d.Timeout(schema.TimeoutCreate), 10*time.Second, nasService.NasMountTargetStateRefreshFunc(d.Id(), []string{}))
 	if _, err := stateConf.WaitForState(); err != nil {
 		return WrapErrorf(err, IdMsg, d.Id())
 	}
-
 	return resourceAlicloudNasMountTargetUpdate(d, meta)
 }
 func resourceAlicloudNasMountTargetRead(d *schema.ResourceData, meta interface{}) error {
@@ -138,16 +153,16 @@ func resourceAlicloudNasMountTargetRead(d *schema.ResourceData, meta interface{}
 	d.Set("file_system_id", parts[0])
 	d.Set("access_group_name", object["AccessGroup"])
 	d.Set("status", object["Status"])
+	d.Set("vpc_id", object["VpcId"])
 	d.Set("vswitch_id", object["VswId"])
 	d.Set("mount_target_domain", object["MountTargetDomain"])
+	d.Set("network_type", object["NetworkType"])
+
 	return nil
 }
 func resourceAlicloudNasMountTargetUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	conn, err := client.NewNasClient()
-	if err != nil {
-		return WrapError(err)
-	}
+	var err error
 	var response map[string]interface{}
 	if len(strings.Split(d.Id(), ":")) != 2 {
 		d.SetId(fmt.Sprintf("%v:%v", strings.Split(d.Id(), "-")[0], d.Id()))
@@ -173,9 +188,9 @@ func resourceAlicloudNasMountTargetUpdate(d *schema.ResourceData, meta interface
 		action := "ModifyMountTarget"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+			response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 			if err != nil {
-				if NeedRetry(err) {
+				if NeedRetry(err) || IsExpectedErrors(err, []string{"OperationDenied.InvalidState"}) {
 					wait()
 					return resource.RetryableError(err)
 				}
@@ -186,6 +201,11 @@ func resourceAlicloudNasMountTargetUpdate(d *schema.ResourceData, meta interface
 		})
 		if err != nil {
 			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+		}
+		nasService := NasService{client}
+		stateConf := BuildStateConf([]string{"Pending"}, []string{"Active", "Inactive"}, d.Timeout(schema.TimeoutUpdate), 10*time.Second, nasService.NasMountTargetStateRefreshFunc(d.Id(), []string{}))
+		if _, err := stateConf.WaitForState(); err != nil {
+			return WrapErrorf(err, IdMsg, d.Id())
 		}
 	}
 	return resourceAlicloudNasMountTargetRead(d, meta)
@@ -201,20 +221,15 @@ func resourceAlicloudNasMountTargetDelete(d *schema.ResourceData, meta interface
 	}
 	action := "DeleteMountTarget"
 	var response map[string]interface{}
-	conn, err := client.NewNasClient()
-	if err != nil {
-		return WrapError(err)
-	}
 	request := map[string]interface{}{
 		"FileSystemId":      parts[0],
 		"MountTargetDomain": parts[1],
 	}
-
 	wait := incrementalWait(3*time.Second, 3*time.Second)
 	err = resource.Retry(d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
-		response, err = conn.DoRequest(StringPointer(action), nil, StringPointer("POST"), StringPointer("2017-06-26"), StringPointer("AK"), nil, request, &util.RuntimeOptions{})
+		response, err = client.RpcPost("NAS", "2017-06-26", action, nil, request, false)
 		if err != nil {
-			if NeedRetry(err) {
+			if NeedRetry(err) || IsExpectedErrors(err, []string{"VolumeStatusForbidOperation", "OperationDenied.InvalidState"}) {
 				wait()
 				return resource.RetryableError(err)
 			}

@@ -20,15 +20,26 @@ For information about SLS Alert and how to use it, see [SLS Alert Overview](http
 
 Basic Usage
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_log_alert&exampleId=95292d19-57da-ce57-7642-9f8788f163adb3198a22&activeTab=example&spm=docs.r.log_alert.0.95292d1957&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
+}
+
 resource "alicloud_log_project" "example" {
-  name        = "test-tf"
-  description = "create by terraform"
+  name        = "terraform-example-${random_integer.default.result}"
+  description = "terraform-example"
 }
 
 resource "alicloud_log_store" "example" {
   project               = alicloud_log_project.example.name
-  name                  = "tf-test-logstore"
+  name                  = "example-store"
   retention_period      = 3650
   shard_count           = 3
   auto_split            = true
@@ -38,10 +49,10 @@ resource "alicloud_log_store" "example" {
 
 resource "alicloud_log_alert" "example" {
   project_name      = alicloud_log_project.example.name
-  alert_name        = "tf-test-alert"
-  alert_displayname = "tf-test-alert-displayname"
+  alert_name        = "example-alert"
+  alert_displayname = "example-alert"
   condition         = "count> 100"
-  dashboard         = "tf-test-dashboard"
+  dashboard         = "example-dashboard"
   schedule {
     type            = "FixedRate"
     interval        = "5m"
@@ -51,7 +62,7 @@ resource "alicloud_log_alert" "example" {
     run_immediately = false
   }
   query_list {
-    logstore    = "tf-test-logstore"
+    logstore    = alicloud_log_store.example.name
     chart_title = "chart_title"
     start       = "-60s"
     end         = "20s"
@@ -64,7 +75,7 @@ resource "alicloud_log_alert" "example" {
   }
   notification_list {
     type       = "Email"
-    email_list = ["aliyun@alibaba-inc.com", "tf-test@123.com"]
+    email_list = ["aliyun@alibaba-inc.com", "tf-example@123.com"]
     content    = "alert content"
   }
   notification_list {
@@ -77,15 +88,26 @@ resource "alicloud_log_alert" "example" {
 
 Basic Usage for new alert
 
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_log_alert&exampleId=c21c7650-789a-fe6a-59cf-81dc055a64d950d2b31e&activeTab=example&spm=docs.r.log_alert.1.c21c765078&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
 ```terraform
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
+}
+
 resource "alicloud_log_project" "example" {
-  name        = "test-tf"
-  description = "create by terraform"
+  project_name = "terraform-example-${random_integer.default.result}"
+  description  = "terraform-example"
 }
 
 resource "alicloud_log_store" "example" {
-  project               = alicloud_log_project.example.name
-  name                  = "tf-test-logstore"
+  project_name          = alicloud_log_project.example.project_name
+  logstore_name         = "example-store"
   retention_period      = 3650
   shard_count           = 3
   auto_split            = true
@@ -96,10 +118,9 @@ resource "alicloud_log_store" "example" {
 resource "alicloud_log_alert" "example-2" {
   version           = "2.0"
   type              = "default"
-  project_name      = alicloud_log_project.example.name
-  alert_name        = "tf-test-alert-2"
-  alert_displayname = "tf-test-alert-displayname-2"
-  dashboard         = "tf-test-dashboard"
+  project_name      = alicloud_log_project.example.project_name
+  alert_name        = "example-alert"
+  alert_displayname = "example-alert"
   mute_until        = "1632486684"
   no_data_fire      = "false"
   no_data_severity  = 8
@@ -114,26 +135,28 @@ resource "alicloud_log_alert" "example-2" {
     run_immediately = false
   }
   query_list {
-    store          = "tf-test-logstore"
+    store          = alicloud_log_store.example.logstore_name
     store_type     = "log"
-    project        = alicloud_log_project.example.name
+    project        = alicloud_log_project.example.project_name
     region         = "cn-heyuan"
     chart_title    = "chart_title"
     start          = "-60s"
     end            = "20s"
     query          = "* AND aliyun | select count(1) as cnt"
     power_sql_mode = "auto"
+    dashboard_id   = "example-dashboard"
   }
   query_list {
-    store          = "tf-test-logstore"
+    store          = alicloud_log_store.example.logstore_name
     store_type     = "log"
-    project        = alicloud_log_project.example.name
+    project        = alicloud_log_project.example.project_name
     region         = "cn-heyuan"
     chart_title    = "chart_title"
     start          = "-60s"
     end            = "20s"
     query          = "error | select count(1) as error_cnt"
     power_sql_mode = "enable"
+    dashboard_id   = "example-dashboard"
   }
   labels {
     key   = "env"
@@ -187,12 +210,77 @@ resource "alicloud_log_alert" "example-2" {
   }
 }
 ```
+
+Basic Usage for alert template
+
+<div style="display: block;margin-bottom: 40px;"><div class="oics-button" style="float: right;position: absolute;margin-bottom: 10px;">
+  <a href="https://api.aliyun.com/terraform?resource=alicloud_log_alert&exampleId=cea67a8f-cee7-ce99-008f-0fa3e60f113cca6b547a&activeTab=example&spm=docs.r.log_alert.2.cea67a8fce&intl_lang=EN_US" target="_blank">
+    <img alt="Open in AliCloud" src="https://img.alicdn.com/imgextra/i1/O1CN01hjjqXv1uYUlY56FyX_!!6000000006049-55-tps-254-36.svg" style="max-height: 44px; max-width: 100%;">
+  </a>
+</div></div>
+
+```terraform
+resource "random_integer" "default" {
+  max = 99999
+  min = 10000
+}
+
+resource "alicloud_log_project" "example" {
+  project_name = "terraform-example-${random_integer.default.result}"
+  description  = "terraform-example"
+}
+
+resource "alicloud_log_store" "example" {
+  project_name          = alicloud_log_project.example.project_name
+  logstore_name         = "example-store"
+  retention_period      = 3650
+  shard_count           = 3
+  auto_split            = true
+  max_split_shard_count = 60
+  append_meta           = true
+}
+
+resource "alicloud_log_alert" "example-3" {
+  version           = "2.0"
+  type              = "tpl"
+  project_name      = alicloud_log_project.example.project_name
+  alert_name        = "example-alert"
+  alert_displayname = "example-alert"
+  mute_until        = "1632486684"
+  schedule {
+    type            = "FixedRate"
+    interval        = "5m"
+    hour            = 0
+    day_of_week     = 0
+    delay           = 0
+    run_immediately = false
+  }
+  template_configuration {
+    id          = "sls.app.sls_ack.node.down"
+    type        = "sys"
+    lang        = "cn"
+    annotations = {}
+    tokens = {
+      "interval_minute"        = "5"
+      "default.action_policy"  = "sls.app.ack.builtin"
+      "default.severity"       = "6"
+      "sendResolved"           = "false"
+      "default.project"        = "${alicloud_log_project.example.project_name}"
+      "default.logstore"       = "k8s-event"
+      "default.repeatInterval" = "4h"
+      "trigger_threshold"      = "1"
+      "default.clusterId"      = "example-cluster-id"
+    }
+  }
+}
+```
+
 ## Argument Reference
 
 The following arguments are supported:
 
 * `version` - (Optional, Available in 1.161.0+) The version of alert, new alert is 2.0.
-* `type` - (Optional, Available in 1.161.0+) The type of new alert, new alert is default.
+* `type` - (Optional, Available in 1.161.0+) The type of new alert, `default` for custom alert, `tpl` for template alert.
 * `project_name` - (Required, ForceNew) The project name.
 * `alert_name` - (Required, ForceNew) Name of logstore for configuring alarm service.
 * `alert_displayname` - (Required) Alert displayname.
@@ -207,7 +295,7 @@ The following arguments are supported:
 * `no_data_severity` - (Optional, Available in 1.161.0+) when no data happens, the severity of new alert.
 * `send_resolved` - (Optional, Available in 1.161.0+) when new alert is resolved, whether to notify, default is false.
 * `auto_annotation` - (Optional, Available in 1.164.0+) whether to add automatic annotation, default is false.
-* `query_list` - (Required) Multiple conditions for configured alarm query.
+* `query_list` - (Optinal, Required before 1.203.0) Multiple conditions for configured alarm query.
     * `project` - (Optional, Available in 1.161.0+) Query project.
     * `region` - (Optional, Available in 1.161.0+) Query project region.
     * `role_arn` - (Optional) Query project store's ARN.
@@ -248,6 +336,12 @@ The following arguments are supported:
 * `join_configurations` - (Optional, Available in 1.161.0+) Join configuration for different queries.
     * `type` - (Required) Join type, including cross_join, inner_join, left_join, right_join, full_join, left_exclude, right_exclude, concat, no_join.
     * `condition` - (Required) Join condition.
+* `template_configuration` - (Optional, Available in 1.203.0+) Template configuration for alert, when `type` is `tpl`.
+    * `id` - (Required) Alert template id.
+    * `type` - (Required) Alert template type including `sys`, `user`.
+    * `lang` - (Optional) Alert template language including `cn`, `en`.
+    * `tokens` - (Optional) Alert template tokens.
+    * `annotations` - (Optional) Alert template annotations.
 * `schedule_interval` - (Optional, Deprecated) Execution interval. 60 seconds minimum, such as 60s, 1h. Deprecated from 1.176.0+. use interval in schedule.
 * `schedule_type` - (Optional, Deprecated)  Default FixedRate. No need to configure this parameter. Deprecated from 1.176.0+. use type in schedule.
 * `schedule` - (Optional, Available in 1.176.0+) schedule for alert.

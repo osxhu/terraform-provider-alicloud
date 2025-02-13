@@ -24,6 +24,10 @@ func init() {
 }
 
 func testSweepBpStudioApplication(region string) error {
+	if testSweepPreCheckWithRegions(region, true, connectivity.BpStudioApplicationSupportRegions) {
+		log.Printf("[INFO] Skipping bpstudio unsupported region: %s", region)
+		return nil
+	}
 	rawClient, err := sharedClientForRegion(region)
 	if err != nil {
 		return fmt.Errorf("error getting Alicloud client: %s", err)
@@ -72,15 +76,17 @@ func testSweepBpStudioApplication(region string) error {
 		for _, v := range result {
 			skip := true
 			item := v.(map[string]interface{})
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(strings.ToLower(fmt.Sprint(item["Name"])), strings.ToLower(prefix)) {
-					skip = false
-					break
+			if !sweepAll() {
+				for _, prefix := range prefixes {
+					if strings.HasPrefix(strings.ToLower(fmt.Sprint(item["Name"])), strings.ToLower(prefix)) {
+						skip = false
+						break
+					}
 				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping BpStudioApplication Instance: %v", item["ApplicationId"])
-				continue
+				if skip {
+					log.Printf("[INFO] Skipping BpStudioApplication Instance: %v", item["ApplicationId"])
+					continue
+				}
 			}
 			BpStudioApplicationIds = append(BpStudioApplicationIds, fmt.Sprint(item["ApplicationId"]))
 		}
